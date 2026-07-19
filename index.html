@@ -179,6 +179,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       みねんこオンラインショップへようこそ。<br>
       Minecraftのマルチサーバーで使える、アイテムの注文専用ページです。
     </p>
+    <div id="home-announcements" style="margin:18px 0;"></div>
     <div class="tag-row">
       <span class="tag">① まず「登録」でニックネームを登録</span>
       <span class="tag">② 「ショップ」で欲しいアイテムを選ぶ</span>
@@ -207,9 +208,6 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <p id="reg-done-text" style="font-size:0.9rem;"></p>
       <button class="btn ghost" id="reg-logout">別の名前で登録し直す</button>
     </div>
-
-    <h2 style="margin-top:26px;">📢 お知らせ</h2>
-    <div id="reg-announcements"><span class="note">お知らせはまだありません。</span></div>
 
     <h2 style="margin-top:26px;">登録済みメンバー</h2>
     <div class="tag-row" id="reg-list"><span class="note">読み込み中...</span></div>
@@ -276,10 +274,11 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <div id="admin-users"><span class="note">読み込み中...</span></div>
 
       <h2 style="margin-top:24px;">📢 お知らせ管理</h2>
-      <div class="note">ここで追加したお知らせは、みんなの「登録」タブに表示されます。</div>
+      <div class="note">ここで追加したお知らせは、みんなの「ホーム」タブに大きく表示されます。</div>
       <div id="admin-announcements"></div>
       <textarea id="ann-text" rows="2" placeholder="例：明日20時〜21時は受け渡し休みます" style="margin-top:8px;"></textarea>
       <button class="btn ghost" id="ann-add" style="margin-top:8px;">お知らせを追加</button>
+      <div class="note" id="ann-msg"></div>
 
       <h2 style="margin-top:24px;">商品リスト管理</h2>
       <div id="admin-products"></div>
@@ -305,43 +304,35 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
 
 <script>
-// ---------- remote shared storage (JSONBlob, no signup needed) ----------
+// ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
 // 管理者が「共有データベースを作成する」ボタンを押した後にもらえるIDをここに貼り付けます
-const REMOTE_DB_ID = '019f799c-93c0-7bb9-99b3-2dc28eb82b5f';
+const REMOTE_DB_ID = 'REPLACE_ME';
 const REMOTE_DB_READY = !!(REMOTE_DB_ID && REMOTE_DB_ID !== 'REPLACE_ME');
-const JSONBLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+const KVDB_BASE = 'https://kvdb.io';
 
-async function remoteGetAll(){
+async function remoteGetKey(key){
   if(!REMOTE_DB_READY) return null;
   try{
-    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}?_=${Date.now()}`, {
-      cache: 'no-store',
-      headers:{'Accept':'application/json'}
+    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(key)}?_=${Date.now()}`, {
+      cache: 'no-store'
     });
+    if(res.status === 404) return null;
     if(!res.ok) return null;
-    return await res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   }catch(e){ console.error('remote get failed', e); return null; }
 }
-async function remoteSetAll(data){
+async function remoteSetKey(key, value){
   if(!REMOTE_DB_READY) return false;
   try{
-    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}`, {
-      method:'PUT',
+    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(key)}`, {
+      method: 'POST',
       cache: 'no-store',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(data)
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify(value)
     });
     return res.ok;
   }catch(e){ console.error('remote set failed', e); return false; }
-}
-async function remoteGetKey(key){
-  const all = await remoteGetAll();
-  return (all && all[key] !== undefined) ? all[key] : null;
-}
-async function remoteSetKey(key, value){
-  const all = (await remoteGetAll()) || {};
-  all[key] = value;
-  return await remoteSetAll(all);
 }
 
 // ---------- storage helpers ----------
@@ -365,7 +356,9 @@ async function sget(key, shared){
     return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
+let lastLocalWriteTs = 0;
 async function sset(key, value, shared){
+  lastLocalWriteTs = Date.now();
   if(shared && REMOTE_DB_READY){
     const ok = await remoteSetKey(key, value);
     if(ok) return { key, value, shared };
@@ -395,8 +388,9 @@ function goTab(name){
   document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
   document.getElementById('tab-'+name).style.display='block';
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='home') loadAnnouncements();
   if(name==='shop') loadShop();
-  if(name==='register'){ loadRegisterList(); checkMyRegistration(); loadAnnouncements(); }
+  if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click', ()=>goTab(b.dataset.tab)));
@@ -467,10 +461,13 @@ async function getAnnouncements(){
 }
 async function loadAnnouncements(){
   const anns = await getAnnouncements();
-  const el = document.getElementById('reg-announcements');
+  const el = document.getElementById('home-announcements');
   el.innerHTML = anns.length
-    ? anns.slice().reverse().map(a=>`<div class="note" style="margin-bottom:6px;">📢 ${escapeHtml(a.text)}</div>`).join('')
-    : '<span class="note">お知らせはまだありません。</span>';
+    ? anns.slice().reverse().map(a=>`
+        <div style="background:var(--wood); border:2px solid var(--gold); border-radius:8px; padding:16px 18px; margin-bottom:12px;">
+          <div style="font-size:1.1rem; font-weight:800; color:var(--gold); line-height:1.7;">📢 ${escapeHtml(a.text)}</div>
+        </div>`).join('')
+    : '';
 }
 function renderAdminAnnouncements(anns){
   const el = document.getElementById('admin-announcements');
@@ -489,12 +486,16 @@ async function deleteAnnouncement(id){
 }
 document.getElementById('ann-add').addEventListener('click', async ()=>{
   const text = document.getElementById('ann-text').value.trim();
+  const msg = document.getElementById('ann-msg');
   if(!text) return;
   let anns = await getAnnouncements();
   anns.push({id:uid(), text, ts:Date.now()});
-  await sset('minenko:announcements', anns, true);
+  const ok = await sset('minenko:announcements', anns, true);
   renderAdminAnnouncements(anns);
   document.getElementById('ann-text').value = '';
+  msg.innerHTML = ok
+    ? '<span class="ok">追加しました！</span>'
+    : '<span class="err">保存に失敗しました。通信状況を確認してもう一度お試しください。</span>';
 });
 
 // ---------- shop ----------
@@ -689,17 +690,16 @@ document.getElementById('remote-create').addEventListener('click', async ()=>{
   }
   msg.textContent = '作成中...';
   try{
-    const res = await fetch('https://jsonblob.com/api/jsonBlob', {
+    const res = await fetch('https://kvdb.io', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ users:[], orders:[], products:[], announcements:[], config:{} })
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: 'email=kuanfuf@gmail.com'
     });
-    const loc = res.headers.get('Location') || '';
-    const id = loc.split('/').filter(Boolean).pop();
-    if(id){
+    const id = (await res.text()).trim();
+    if(id && res.ok){
       msg.innerHTML = `作成できました！このIDをそのままClaudeに伝えてください → <b>${id}</b>`;
     } else {
-      msg.innerHTML = '作成はできましたが、IDが取れませんでした。開発者ツール(F12)のNetworkタブで、今のリクエストのLocationヘッダーを確認して教えてください。';
+      msg.innerHTML = '作成に失敗しました。もう一度お試しください。';
     }
   }catch(e){
     msg.innerHTML = '作成に失敗しました: ' + e.message;
@@ -817,14 +817,17 @@ function escapeAttr(s){ return escapeHtml(s); }
 
 // init
 loadRegisterList();
+loadAnnouncements();
 
 // タブに戻ってきた時に最新データを取り直す
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState !== 'visible') return;
+  if(Date.now() - lastLocalWriteTs < 4000) return; // 保存直後の上書きを防ぐ
   const activeBtn = document.querySelector('nav button.active');
   const current = activeBtn ? activeBtn.dataset.tab : 'home';
+  if(current==='home') loadAnnouncements();
   if(current==='shop') loadShop();
-  if(current==='register'){ loadRegisterList(); checkMyRegistration(); loadAnnouncements(); }
+  if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(current==='admin' && adminLoggedIn) loadAdmin();
 });
 </script>
