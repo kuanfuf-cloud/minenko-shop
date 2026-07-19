@@ -153,6 +153,13 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
 .tag{ font-size:0.7rem; background:var(--wood); padding:3px 8px; border-radius:10px; }
 
 footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
+.version-badge{
+  position:fixed; right:10px; bottom:10px;
+  background:var(--wood); border:2px solid var(--wood-light);
+  color:var(--paper); opacity:0.7;
+  font-size:0.65rem; padding:3px 9px; border-radius:6px;
+  font-family:'M PLUS Rounded 1c'; z-index:999; pointer-events:none;
+}
 </style>
 </head>
 <body>
@@ -302,11 +309,12 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
+<div class="version-badge">v1.7 (2026-07-19)</div>
 
 <script>
 // ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
 // 管理者が「共有データベースを作成する」ボタンを押した後にもらえるIDをここに貼り付けます
-const REMOTE_DB_ID = 'REPLACE_ME';
+const REMOTE_DB_ID = 'JjE8nH8oiMYGLxBxPvYsJZ';
 const REMOTE_DB_READY = !!(REMOTE_DB_ID && REMOTE_DB_ID !== 'REPLACE_ME');
 const KVDB_BASE = 'https://kvdb.io';
 
