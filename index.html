@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>みねんこオンラインショップ</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap');
+
+:root{
+  --bg-deep:#161210;
+  --bg-panel:#241b14;
+  --wood:#3d2b1d;
+  --wood-light:#5a4030;
+  --grass:#6f9c3d;
+  --grass-dark:#4f7229;
+  --diamond:#5fd0e8;
+  --gold:#e7c15a;
+  --redstone:#c0453a;
+  --paper:#efe6d3;
+  --ink:#2a2019;
+  --slot:#2f241a;
+  --slot-border-lt:#5c4632;
+  --slot-border-dk:#120d09;
+  font-size:16px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(circle at 20% 10%, rgba(111,156,61,0.08), transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(95,208,232,0.06), transparent 40%),
+    var(--bg-deep);
+  color:var(--paper);
+  font-family:'M PLUS Rounded 1c', sans-serif;
+  min-height:100vh;
+  padding:20px 14px 60px;
+}
+.pixel{ font-family:'Press Start 2P', cursive; letter-spacing:0.5px; }
+
+/* header */
+.hero{
+  max-width:720px; margin:0 auto 18px; text-align:center;
+}
+.hero .badge{
+  display:inline-block; font-size:0.6rem; color:var(--gold);
+  background:var(--bg-panel); border:2px solid var(--wood-light);
+  padding:6px 10px; border-radius:6px; margin-bottom:12px;
+}
+.hero h1{
+  font-size:1.35rem; line-height:1.9; margin:0 0 8px;
+  color:var(--paper); text-shadow:2px 2px 0 var(--ink);
+}
+.hero p{ opacity:0.75; font-size:0.9rem; margin:0; }
+
+/* nav */
+nav{
+  max-width:720px; margin:0 auto 20px; display:grid;
+  grid-template-columns:repeat(4,1fr); gap:8px;
+}
+nav button{
+  font-family:inherit; font-size:0.75rem; font-weight:700;
+  padding:12px 4px; cursor:pointer; color:var(--paper);
+  background:var(--wood);
+  border:3px solid; border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light);
+  border-radius:4px;
+  transition:transform .08s ease;
+}
+nav button:active{ transform:translateY(2px); }
+nav button.active{
+  background:var(--grass); border-color:#8fc65a var(--grass-dark) var(--grass-dark) #8fc65a;
+  color:#16210a;
+}
+
+main{ max-width:720px; margin:0 auto; }
+.panel{
+  background:var(--bg-panel);
+  border:3px solid; border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light);
+  border-radius:6px;
+  padding:22px 20px;
+  margin-bottom:16px;
+}
+.panel h2{
+  font-size:0.95rem; margin:0 0 14px; color:var(--diamond);
+  display:flex; align-items:center; gap:8px;
+}
+.panel h2::before{ content:"◆"; font-size:0.8rem; }
+
+label{ display:block; font-size:0.82rem; margin:14px 0 6px; opacity:0.85; }
+input[type=text], input[type=password], textarea, select{
+  width:100%; font-family:inherit; font-size:0.95rem;
+  padding:10px 12px; border-radius:5px; border:2px solid var(--slot-border-lt);
+  background:var(--slot); color:var(--paper); outline:none;
+}
+input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
+.btn{
+  font-family:'M PLUS Rounded 1c'; font-weight:800; font-size:0.95rem;
+  cursor:pointer; padding:12px 18px; border-radius:6px; margin-top:16px;
+  border:3px solid; color:#16210a;
+  background:var(--grass); border-color:#8fc65a var(--grass-dark) var(--grass-dark) #8fc65a;
+}
+.btn:active{ transform:translateY(2px); }
+.btn.secondary{ background:var(--diamond); border-color:#a8ecf9 #2e8fa3 #2e8fa3 #a8ecf9; }
+.btn.ghost{ background:var(--wood); color:var(--paper); border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light); font-size:0.8rem; padding:8px 12px;}
+.btn:disabled{ opacity:0.4; cursor:not-allowed; }
+
+.note{ font-size:0.78rem; opacity:0.65; margin-top:8px; line-height:1.6; }
+.ok{ color:#9be36a; } .err{ color:#ff8b7d; }
+
+/* inventory grid for shop */
+.inv-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+  gap:10px; margin:10px 0 16px;
+}
+.slot{
+  background:var(--slot); border:3px solid;
+  border-color:var(--slot-border-dk) var(--slot-border-lt) var(--slot-border-lt) var(--slot-border-dk);
+  border-radius:4px; padding:10px 8px; text-align:center; cursor:pointer;
+  position:relative;
+}
+.slot.selected{ outline:2px solid var(--gold); outline-offset:-2px; background:#3a2c1a; }
+.slot .icon{ font-size:1.6rem; }
+.slot .name{ font-size:0.72rem; margin-top:6px; min-height:2.4em; }
+.slot .cat{ font-size:0.65rem; color:var(--diamond); margin-top:4px; opacity:0.85; }
+.qty-badge{
+  position:absolute; top:2px; right:2px; background:var(--redstone); color:#fff;
+  font-size:0.65rem; padding:1px 5px; border-radius:8px; display:none;
+}
+.qty-badge.show{ display:block; }
+
+.cart{
+  background:var(--wood); border:2px dashed var(--wood-light); border-radius:6px;
+  padding:14px; margin-top:6px; font-size:0.85rem;
+}
+.cart-row{ display:flex; justify-content:space-between; padding:4px 0; }
+.cart-total{ border-top:1px solid var(--wood-light); margin-top:8px; padding-top:8px; font-weight:800; color:var(--gold); display:flex; justify-content:space-between;}
+
+/* orders list */
+.order-card{
+  border:2px solid var(--wood-light); border-radius:6px; padding:12px 14px; margin-bottom:10px;
+  background:var(--slot);
+}
+.order-card .top{ display:flex; justify-content:space-between; font-size:0.85rem; }
+.order-card .items{ font-size:0.8rem; opacity:0.85; margin:6px 0; }
+.status-pill{
+  font-size:0.7rem; padding:3px 10px; border-radius:10px; border:none; cursor:pointer; font-weight:700;
+}
+.status-未処理{ background:var(--redstone); color:#fff; }
+.status-対応中{ background:var(--gold); color:#3a2c00; }
+.status-完了{ background:var(--grass); color:#16210a; }
+
+.tag-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.tag{ font-size:0.7rem; background:var(--wood); padding:3px 8px; border-radius:10px; }
+
+footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge pixel">MINECRAFT SHOP</div>
+  <h1 class="pixel">みねんこ<br>オンラインショップ</h1>
+  <p>サーバー内アイテムの注文はここから。まずは登録してね！</p>
+</div>
+
+<nav>
+  <button data-tab="home" class="active">🏠 ホーム</button>
+  <button data-tab="register">📝 登録</button>
+  <button data-tab="shop">🛒 ショップ</button>
+  <button data-tab="admin">🔧 管理</button>
+</nav>
+
+<main>
+
+  <!-- HOME -->
+  <section class="panel tab-content" id="tab-home">
+    <h2>ようこそ！</h2>
+    <p style="line-height:1.9; font-size:0.9rem;">
+      みねんこオンラインショップへようこそ。<br>
+      Minecraftのマルチサーバーで使える、アイテムの注文専用ページです。
+    </p>
+    <div class="tag-row">
+      <span class="tag">① まず「登録」でニックネームを登録</span>
+      <span class="tag">② 「ショップ」で欲しいアイテムを選ぶ</span>
+      <span class="tag">③ 注文するとお店に通知が届く</span>
+    </div>
+    <button class="btn" onclick="goTab('register')">まず登録しよう →</button>
+  </section>
+
+  <!-- REGISTER -->
+  <section class="panel tab-content" id="tab-register" style="display:none;">
+    <div id="reg-form-wrap">
+      <h2>登録</h2>
+      <label>ニックネーム（表示名） *</label>
+      <input type="text" id="reg-nickname" placeholder="例：たろう">
+      <label>メールアドレス *</label>
+      <input type="text" id="reg-email" placeholder="例：taro@example.com">
+      <div class="note">注文確認の連絡に使うので、正確に入力してください。</div>
+      <label>マイクラのID / 名前（あれば）</label>
+      <input type="text" id="reg-mcid" placeholder="例：Taro_MC">
+      <button class="btn" id="reg-submit">登録する</button>
+      <div class="note" id="reg-msg"></div>
+    </div>
+
+    <div id="reg-done-wrap" style="display:none;">
+      <h2>登録ずみ</h2>
+      <p id="reg-done-text" style="font-size:0.9rem;"></p>
+      <button class="btn ghost" id="reg-logout">別の名前で登録し直す</button>
+    </div>
+
+    <h2 style="margin-top:26px;">📢 お知らせ</h2>
+    <div id="reg-announcements"><span class="note">お知らせはまだありません。</span></div>
+
+    <h2 style="margin-top:26px;">登録済みメンバー</h2>
+    <div class="tag-row" id="reg-list"><span class="note">読み込み中...</span></div>
+  </section>
+
+  <!-- SHOP -->
+  <section class="panel tab-content" id="tab-shop" style="display:none;">
+    <h2>ショップ</h2>
+    <label>あなたのニックネーム *</label>
+    <select id="shop-nickname"><option value="">-- 選択 --</option></select>
+    <div class="note">「登録」タブから登録すると、ここに表示されます。</div>
+
+    <label style="margin-top:20px;">アイテムをタップして選択（もう一度タップで数量+1）</label>
+    <div class="inv-grid" id="shop-grid"></div>
+    <div class="note">値段は在庫を確認してから、受け渡し時に決めます。</div>
+
+    <label>メモ・要望（任意）</label>
+    <textarea id="shop-note" rows="2" placeholder="例：明日の20時までに欲しいです"></textarea>
+
+    <div class="cart" id="shop-cart">
+      <div class="note">まだ何も選んでいません。</div>
+    </div>
+
+    <button class="btn" id="shop-submit">この内容で注文する</button>
+    <div class="note" id="shop-msg"></div>
+  </section>
+
+  <!-- ADMIN -->
+  <section class="panel tab-content" id="tab-admin" style="display:none;">
+    <div id="admin-gate">
+      <h2>管理画面ログイン</h2>
+      <label>管理者パスワード</label>
+      <input type="password" id="admin-pin-input" placeholder="パスワードを入力">
+      <button class="btn" id="admin-login">ログイン</button>
+      <div class="note" id="admin-login-msg"></div>
+    </div>
+
+    <div id="admin-body" style="display:none;">
+      <div class="note" id="storage-mode-note"></div>
+
+      <h2>🌐 共有データベース（全端末で共有）</h2>
+      <div class="note">これを設定すると、友だちがどの端末でこのファイルを開いても、登録・注文・商品・お知らせが全員同じデータになります。</div>
+      <div class="note" id="remote-status" style="margin-top:8px;"></div>
+      <button class="btn secondary" id="remote-create" style="margin-top:8px;">共有データベースを作成する（初回のみ）</button>
+      <div class="note" id="remote-create-msg"></div>
+
+      <h2 style="margin-top:24px;">通知設定</h2>
+      <button class="btn secondary" id="notif-enable">🔔 このPCで注文通知を有効にする</button>
+      <div class="note">タブをこの画面（管理）で開いたままにしておくと、新しい注文が来たときにデスクトップ通知＆音でお知らせします。</div>
+
+      <h2 style="margin-top:24px;">メール通知（EmailJS）</h2>
+      <div class="note">注文が来たら kuanfuf@gmail.com にメールを自動送信します。無料の EmailJS アカウントで3つの値を取得してここに入力してください（emailjs.com → Email Services / Email Templates / Account → API Keys）。<br>
+      テンプレートの本文には <code>{{message}}</code>（例：「〇〇さんから〇〇の注文が入りました。確認してください。」）を入れてください。他に使える変数：<code>{{nickname}}</code> <code>{{buyer_email}}</code> <code>{{items}}</code> <code>{{note}}</code> <code>{{order_id}}</code>。宛先は Template設定の「To Email」に kuanfuf@gmail.com を固定で入れ、返信先は <code>{{reply_to}}</code> を「Reply To」に設定すると注文者に直接返信できます。</div>
+      <label>Service ID</label>
+      <input type="text" id="cfg-service" placeholder="service_xxxxxxx">
+      <label>Template ID</label>
+      <input type="text" id="cfg-template" placeholder="template_xxxxxxx">
+      <label>Public Key</label>
+      <input type="text" id="cfg-key" placeholder="公開キー">
+      <button class="btn ghost" id="cfg-save">メール設定を保存</button>
+      <div class="note" id="cfg-msg"></div>
+
+      <h2 style="margin-top:24px;">👤 メンバー管理</h2>
+      <div id="admin-users"><span class="note">読み込み中...</span></div>
+
+      <h2 style="margin-top:24px;">📢 お知らせ管理</h2>
+      <div class="note">ここで追加したお知らせは、みんなの「登録」タブに表示されます。</div>
+      <div id="admin-announcements"></div>
+      <textarea id="ann-text" rows="2" placeholder="例：明日20時〜21時は受け渡し休みます" style="margin-top:8px;"></textarea>
+      <button class="btn ghost" id="ann-add" style="margin-top:8px;">お知らせを追加</button>
+
+      <h2 style="margin-top:24px;">商品リスト管理</h2>
+      <div id="admin-products"></div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <select id="prod-category" style="max-width:140px;">
+          <option value="ポーション">ポーション</option>
+          <option value="ブロック">ブロック</option>
+          <option value="食べ物">食べ物</option>
+          <option value="アイテム">アイテム</option>
+        </select>
+        <input type="text" id="prod-name" placeholder="商品名">
+      </div>
+      <button class="btn ghost" id="prod-add" style="margin-top:10px;">商品を追加</button>
+
+      <h2 style="margin-top:24px;">注文一覧</h2>
+      <div id="admin-orders"><span class="note">読み込み中...</span></div>
+      <button class="btn ghost" id="admin-refresh">🔄 更新</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>みねんこオンラインショップ / Minecraft server use only</footer>
+
+<script>
+// ---------- remote shared storage (JSONBlob, no signup needed) ----------
+// 管理者が「共有データベースを作成する」ボタンを押した後にもらえるIDをここに貼り付けます
+const REMOTE_DB_ID = '019f799c-93c0-7bb9-99b3-2dc28eb82b5f';
+const REMOTE_DB_READY = !!(REMOTE_DB_ID && REMOTE_DB_ID !== 'REPLACE_ME');
+const JSONBLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+
+async function remoteGetAll(){
+  if(!REMOTE_DB_READY) return null;
+  try{
+    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}`, { headers:{'Accept':'application/json'} });
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ console.error('remote get failed', e); return null; }
+}
+async function remoteSetAll(data){
+  if(!REMOTE_DB_READY) return false;
+  try{
+    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    return res.ok;
+  }catch(e){ console.error('remote set failed', e); return false; }
+}
+async function remoteGetKey(key){
+  const all = await remoteGetAll();
+  return (all && all[key] !== undefined) ? all[key] : null;
+}
+async function remoteSetKey(key, value){
+  const all = (await remoteGetAll()) || {};
+  all[key] = value;
+  return await remoteSetAll(all);
+}
+
+// ---------- storage helpers ----------
+const HAS_CLOUD_STORAGE = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function');
+if(!HAS_CLOUD_STORAGE && !REMOTE_DB_READY){
+  console.warn('共有ストレージが未設定のため、この端末内だけのローカル保存(localStorage)で動作しています。管理タブの「共有データベース」設定を確認してください。');
+}
+async function sget(key, shared){
+  if(shared && REMOTE_DB_READY){
+    const v = await remoteGetKey(key);
+    if(v !== null) return v;
+  }
+  if(HAS_CLOUD_STORAGE){
+    try{
+      const r = await window.storage.get(key, shared);
+      if(r) return JSON.parse(r.value);
+    }catch(e){ /* fall through */ }
+  }
+  try{
+    const raw = localStorage.getItem('minenko_local:'+key);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+async function sset(key, value, shared){
+  if(shared && REMOTE_DB_READY){
+    const ok = await remoteSetKey(key, value);
+    if(ok) return { key, value, shared };
+    console.warn('共有データベースへの保存に失敗したため、この端末だけのローカル保存にします:', key);
+  }
+  if(HAS_CLOUD_STORAGE){
+    for(let attempt=0; attempt<2; attempt++){
+      try{
+        const res = await window.storage.set(key, JSON.stringify(value), shared);
+        if(res) return res;
+      }catch(e){
+        console.error('cloud storage set failed (attempt '+(attempt+1)+')', e);
+        if(attempt===0) await new Promise(r=>setTimeout(r,500));
+      }
+    }
+  }
+  try{
+    localStorage.setItem('minenko_local:'+key, JSON.stringify(value));
+    return { key, value, shared, local:true };
+  }catch(e){ console.error('local storage save failed', e); return null; }
+}
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+// ---------- tabs ----------
+function goTab(name){
+  document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
+  document.getElementById('tab-'+name).style.display='block';
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='shop') loadShop();
+  if(name==='register'){ loadRegisterList(); checkMyRegistration(); loadAnnouncements(); }
+  if(name==='admin' && adminLoggedIn) loadAdmin();
+}
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click', ()=>goTab(b.dataset.tab)));
+
+// ---------- default products ----------
+const CATEGORY_ICON = { 'ポーション':'🧪', 'ブロック':'🧱', '食べ物':'🍞', 'アイテム':'📦' };
+const DEFAULT_EMAIL_CONFIG = { serviceId:'service_rm3jhi9', templateId:'template_1e124oa', publicKey:'fooP-LzYWlDXpMO0h' };
+async function getEmailConfig(){
+  let cfg = await sget('minenko:config', true);
+  if(!cfg){ cfg = DEFAULT_EMAIL_CONFIG; await sset('minenko:config', cfg, true); }
+  return cfg;
+}
+async function getProducts(){
+  let p = await sget('minenko:products', true);
+  if(!p){ p = []; await sset('minenko:products', p, true); }
+  return p;
+}
+
+// ---------- register ----------
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+document.getElementById('reg-submit').addEventListener('click', async ()=>{
+  const nickname = document.getElementById('reg-nickname').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const mcid = document.getElementById('reg-mcid').value.trim();
+  const msg = document.getElementById('reg-msg');
+  if(!nickname){ msg.innerHTML = '<span class="err">ニックネームを入力してください。</span>'; return; }
+  if(!email || !EMAIL_RE.test(email)){ msg.innerHTML = '<span class="err">正しいメールアドレスを入力してください。</span>'; return; }
+  let users = await sget('minenko:users', true) || [];
+  if(users.some(u=>u.nickname===nickname)){
+    msg.innerHTML = '<span class="err">そのニックネームは既に使われています。別の名前にしてください。</span>'; return;
+  }
+  users.push({id:uid(), nickname, email, mcid, ts:Date.now()});
+  await sset('minenko:users', users, true);
+  await sset('minenko:my_registration', {nickname, email, mcid}, false);
+  msg.innerHTML = '<span class="ok">登録できました！「ショップ」タブから注文できます。</span>';
+  document.getElementById('reg-nickname').value=''; document.getElementById('reg-email').value=''; document.getElementById('reg-mcid').value='';
+  loadRegisterList();
+  checkMyRegistration();
+});
+document.getElementById('reg-logout').addEventListener('click', async ()=>{
+  await sset('minenko:my_registration', null, false);
+  checkMyRegistration();
+});
+async function checkMyRegistration(){
+  const mine = await sget('minenko:my_registration', false);
+  const formWrap = document.getElementById('reg-form-wrap');
+  const doneWrap = document.getElementById('reg-done-wrap');
+  if(mine && mine.nickname){
+    formWrap.style.display = 'none';
+    doneWrap.style.display = 'block';
+    document.getElementById('reg-done-text').textContent = `「${mine.nickname}」として登録ずみです。「ショップ」タブからそのまま注文できます。`;
+  } else {
+    formWrap.style.display = 'block';
+    doneWrap.style.display = 'none';
+  }
+}
+async function loadRegisterList(){
+  const users = await sget('minenko:users', true) || [];
+  const el = document.getElementById('reg-list');
+  el.innerHTML = users.length ? users.map(u=>`<span class="tag">${escapeHtml(u.nickname)}</span>`).join('') : '<span class="note">まだ誰も登録していません。</span>';
+}
+
+// ---------- announcements ----------
+async function getAnnouncements(){
+  let a = await sget('minenko:announcements', true);
+  if(!a){ a = []; await sset('minenko:announcements', a, true); }
+  return a;
+}
+async function loadAnnouncements(){
+  const anns = await getAnnouncements();
+  const el = document.getElementById('reg-announcements');
+  el.innerHTML = anns.length
+    ? anns.slice().reverse().map(a=>`<div class="note" style="margin-bottom:6px;">📢 ${escapeHtml(a.text)}</div>`).join('')
+    : '<span class="note">お知らせはまだありません。</span>';
+}
+function renderAdminAnnouncements(anns){
+  const el = document.getElementById('admin-announcements');
+  el.innerHTML = anns.length ? anns.slice().reverse().map(a=>`
+    <div class="tag-row" style="margin-bottom:4px;">
+      <span class="tag">${escapeHtml(a.text)}
+        <a href="javascript:void(0)" onclick="deleteAnnouncement('${a.id}')" style="color:#ff8b7d; margin-left:8px;">✕</a>
+      </span>
+    </div>`).join('') : '<div class="note">まだお知らせがありません。</div>';
+}
+async function deleteAnnouncement(id){
+  let anns = await getAnnouncements();
+  anns = anns.filter(a=>a.id!==id);
+  await sset('minenko:announcements', anns, true);
+  renderAdminAnnouncements(anns);
+}
+document.getElementById('ann-add').addEventListener('click', async ()=>{
+  const text = document.getElementById('ann-text').value.trim();
+  if(!text) return;
+  let anns = await getAnnouncements();
+  anns.push({id:uid(), text, ts:Date.now()});
+  await sset('minenko:announcements', anns, true);
+  renderAdminAnnouncements(anns);
+  document.getElementById('ann-text').value = '';
+});
+
+// ---------- shop ----------
+let cart = {}; // productId -> qty
+async function loadShop(){
+  const users = await sget('minenko:users', true) || [];
+  const sel = document.getElementById('shop-nickname');
+  sel.innerHTML = '<option value="">-- 選択 --</option>' + users.map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}</option>`).join('');
+
+  const products = await getProducts();
+  const grid = document.getElementById('shop-grid');
+  grid.innerHTML = products.length ? products.map(p=>`
+    <div class="slot" data-id="${p.id}" onclick="tapSlot('${p.id}')">
+      <div class="qty-badge" id="badge-${p.id}"></div>
+      <div class="icon">${p.icon}</div>
+      <div class="name">${escapeHtml(p.name)}</div>
+      <div class="cat">${escapeHtml(p.category)}</div>
+    </div>`).join('') : '<div class="note">まだ商品が登録されていません。管理者が「管理」タブから追加します。</div>';
+  window.__products = products;
+  renderCart();
+}
+function tapSlot(id){
+  cart[id] = (cart[id]||0) + 1;
+  const badge = document.getElementById('badge-'+id);
+  badge.textContent = cart[id];
+  badge.classList.add('show');
+  document.querySelector(`.slot[data-id="${id}"]`).classList.add('selected');
+  renderCart();
+}
+function renderCart(){
+  const box = document.getElementById('shop-cart');
+  const ids = Object.keys(cart).filter(k=>cart[k]>0);
+  if(!ids.length){ box.innerHTML = '<div class="note">まだ何も選んでいません。</div>'; return; }
+  const products = window.__products || [];
+  let html = '';
+  ids.forEach(id=>{
+    const p = products.find(x=>x.id===id);
+    if(!p) return;
+    html += `<div class="cart-row"><span>${escapeHtml(p.icon)} ${escapeHtml(p.name)} × ${cart[id]}</span>
+      <span><button class="btn ghost" style="padding:2px 8px; font-size:0.7rem;" onclick="removeOne('${id}')">−1</button></span></div>`;
+  });
+  box.innerHTML = html;
+}
+function removeOne(id){
+  cart[id] = Math.max(0, (cart[id]||0)-1);
+  const badge = document.getElementById('badge-'+id);
+  if(cart[id]<=0){
+    badge.classList.remove('show'); badge.textContent='';
+    document.querySelector(`.slot[data-id="${id}"]`)?.classList.remove('selected');
+  } else { badge.textContent = cart[id]; }
+  renderCart();
+}
+
+document.getElementById('shop-submit').addEventListener('click', async ()=>{
+  const msg = document.getElementById('shop-msg');
+  const nickname = document.getElementById('shop-nickname').value;
+  const note = document.getElementById('shop-note').value.trim();
+  const ids = Object.keys(cart).filter(k=>cart[k]>0);
+  if(!nickname){ msg.innerHTML = '<span class="err">ニックネームを選択してください（未登録の方は「登録」から）。</span>'; return; }
+  if(!ids.length){ msg.innerHTML = '<span class="err">アイテムを1つ以上選んでください。</span>'; return; }
+
+  const products = window.__products || [];
+  const items = ids.map(id=>{
+    const p = products.find(x=>x.id===id);
+    return {name:p.name, category:p.category, qty:cart[id]};
+  });
+
+  const users = await sget('minenko:users', true) || [];
+  const buyer = users.find(u=>u.nickname===nickname);
+  const buyerEmail = buyer ? buyer.email : '';
+  const order = { id: uid(), nickname, email: buyerEmail, items, note, status:'未処理', ts: Date.now() };
+  let orders = await sget('minenko:orders', true) || [];
+  orders.push(order);
+  const ok = await sset('minenko:orders', orders, true);
+
+  if(ok){
+    msg.innerHTML = '<span class="ok">注文を送信しました！お店からの連絡を待ってね。</span>';
+  } else {
+    msg.innerHTML = '<span class="err">保存に時間がかかっていますが、お店への通知は送っています。少し待ってからページを更新して確認してください。</span>';
+  }
+  cart = {}; document.getElementById('shop-note').value='';
+  loadShop();
+
+  // メールは保存の成否に関わらず必ず試みる
+  sendOrderEmail(order).catch(e=>console.error('email send error', e));
+});
+
+// ---------- email via EmailJS REST API (no SDK needed) ----------
+async function sendOrderEmail(order){
+  const cfg = await getEmailConfig();
+  if(!cfg || !cfg.serviceId || !cfg.templateId || !cfg.publicKey) return;
+  const itemsText = order.items.map(i=>`${i.name} ×${i.qty}`).join('\n');
+  const itemsSummary = order.items.map(i=>`${i.name}×${i.qty}`).join('、');
+  const message = `${order.nickname}さんから${itemsSummary}の注文が入りました。確認してください。`;
+  const body = {
+    service_id: cfg.serviceId,
+    template_id: cfg.templateId,
+    user_id: cfg.publicKey,
+    template_params: {
+      to_email: 'kuanfuf@gmail.com',
+      reply_to: order.email || '',
+      subject: `【みねんこ】${order.nickname}さんより新規注文`,
+      message: message,
+      nickname: order.nickname,
+      buyer_email: order.email || '(未登録)',
+      items: itemsText,
+      note: order.note || '(なし)',
+      order_id: order.id
+    }
+  };
+  try{
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const resText = await res.text().catch(()=> '');
+    if(!res.ok){
+      console.error('EmailJS送信エラー:', res.status, resText);
+    } else {
+      console.log('EmailJS送信成功:', resText);
+    }
+  }catch(e){ console.error('email send failed (network error)', e); }
+}
+
+// ---------- admin ----------
+let adminLoggedIn = false;
+const ADMIN_PASSWORD = 'kansuke1102';
+document.getElementById('admin-login').addEventListener('click', ()=>{
+  const input = document.getElementById('admin-pin-input').value;
+  const msg = document.getElementById('admin-login-msg');
+  if(input === ADMIN_PASSWORD){
+    adminLoggedIn = true;
+    document.getElementById('admin-gate').style.display='none';
+    document.getElementById('admin-body').style.display='block';
+    loadAdmin();
+  } else {
+    msg.innerHTML = '<span class="err">パスワードが違います。</span>';
+  }
+});
+
+async function loadAdmin(){
+  document.getElementById('storage-mode-note').innerHTML = REMOTE_DB_READY
+    ? '<span class="ok">✅ 共有データベースが有効：友だちがどの端末で開いても同じデータになります。</span>'
+    : (HAS_CLOUD_STORAGE
+      ? '<span class="ok">✅ 共有ストレージが有効：友だちの登録・注文がここに反映されます。</span>'
+      : '<span class="err">⚠️ まだ「共有データベース」が未設定です。この端末内だけの保存になり、友だちとは共有されません。下の「共有データベースを作成する」から設定してください。</span>');
+  document.getElementById('remote-status').innerHTML = REMOTE_DB_READY
+    ? `<span class="ok">設定済み（データベースID: ${REMOTE_DB_ID}）</span>`
+    : '<span class="err">未設定</span>';
+  // config
+  const cfg = await getEmailConfig();
+  if(cfg){
+    document.getElementById('cfg-service').value = cfg.serviceId||'';
+    document.getElementById('cfg-template').value = cfg.templateId||'';
+    document.getElementById('cfg-key').value = cfg.publicKey||'';
+  }
+  // members
+  await renderAdminUsers();
+  // announcements
+  renderAdminAnnouncements(await getAnnouncements());
+  // products
+  const products = await getProducts();
+  renderAdminProducts(products);
+  // orders
+  await renderAdminOrders();
+}
+async function renderAdminUsers(){
+  const users = await sget('minenko:users', true) || [];
+  const el = document.getElementById('admin-users');
+  el.innerHTML = users.length ? users.map(u=>`
+    <div class="tag-row" style="margin-bottom:4px;">
+      <span class="tag">${escapeHtml(u.nickname)}（${escapeHtml(u.email||'メール未登録')}）
+        <a href="javascript:void(0)" onclick="deleteUser('${u.id}')" style="color:#ff8b7d; margin-left:8px;">✕ 削除</a>
+      </span>
+    </div>`).join('') : '<div class="note">登録者がいません。</div>';
+}
+async function deleteUser(id){
+  if(!confirm('このメンバーを削除しますか？')) return;
+  let users = await sget('minenko:users', true) || [];
+  users = users.filter(u=>u.id!==id);
+  await sset('minenko:users', users, true);
+  renderAdminUsers();
+}
+document.getElementById('remote-create').addEventListener('click', async ()=>{
+  const msg = document.getElementById('remote-create-msg');
+  if(REMOTE_DB_READY){
+    msg.innerHTML = '<span class="ok">すでに設定済みです。</span>';
+    return;
+  }
+  msg.textContent = '作成中...';
+  try{
+    const res = await fetch('https://jsonblob.com/api/jsonBlob', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ users:[], orders:[], products:[], announcements:[], config:{} })
+    });
+    const loc = res.headers.get('Location') || '';
+    const id = loc.split('/').filter(Boolean).pop();
+    if(id){
+      msg.innerHTML = `作成できました！このIDをそのままClaudeに伝えてください → <b>${id}</b>`;
+    } else {
+      msg.innerHTML = '作成はできましたが、IDが取れませんでした。開発者ツール(F12)のNetworkタブで、今のリクエストのLocationヘッダーを確認して教えてください。';
+    }
+  }catch(e){
+    msg.innerHTML = '作成に失敗しました: ' + e.message;
+  }
+});
+
+
+function renderAdminProducts(products){
+  const el = document.getElementById('admin-products');
+  el.innerHTML = products.length ? products.map(p=>`
+    <div class="tag-row" style="margin-bottom:4px;">
+      <span class="tag">${p.icon} ${escapeHtml(p.name)}（${escapeHtml(p.category)}）
+        <a href="javascript:void(0)" onclick="deleteProduct('${p.id}')" style="color:#ff8b7d; margin-left:8px;">✕</a>
+      </span>
+    </div>`).join('') : '<div class="note">まだ商品がありません。下から追加してください。</div>';
+}
+async function deleteProduct(id){
+  let products = await getProducts();
+  products = products.filter(p=>p.id!==id);
+  await sset('minenko:products', products, true);
+  renderAdminProducts(products);
+}
+document.getElementById('prod-add').addEventListener('click', async ()=>{
+  const category = document.getElementById('prod-category').value;
+  const name = document.getElementById('prod-name').value.trim();
+  if(!name) return;
+  let products = await getProducts();
+  products.push({id:uid(), icon: CATEGORY_ICON[category] || '📦', name, category});
+  await sset('minenko:products', products, true);
+  renderAdminProducts(products);
+  document.getElementById('prod-name').value='';
+});
+
+document.getElementById('cfg-save').addEventListener('click', async ()=>{
+  const serviceId = document.getElementById('cfg-service').value.trim();
+  const templateId = document.getElementById('cfg-template').value.trim();
+  const publicKey = document.getElementById('cfg-key').value.trim();
+  await sset('minenko:config', {serviceId, templateId, publicKey}, true);
+  document.getElementById('cfg-msg').innerHTML = '<span class="ok">保存しました。次の注文からメール送信を試みます。</span>';
+});
+
+async function renderAdminOrders(){
+  const el = document.getElementById('admin-orders');
+  const orders = (await sget('minenko:orders', true) || []).slice().reverse();
+  if(!orders.length){ el.innerHTML = '<span class="note">まだ注文はありません。</span>'; return; }
+  el.innerHTML = orders.map(o=>{
+    const itemsText = o.items.map(i=>`${i.name}×${i.qty}`).join(' / ');
+    const itemsSummary = o.items.map(i=>`${i.name}×${i.qty}`).join('、');
+    const d = new Date(o.ts);
+    const mailBody = encodeURIComponent(`${o.nickname}さんから${itemsSummary}の注文が入りました。確認してください。\n\n注文者メール: ${o.email||'(未登録)'}\n内容: ${itemsText}\nメモ: ${o.note||'なし'}\n注文ID: ${o.id}`);
+    return `<div class="order-card">
+      <div class="top"><b>${escapeHtml(o.nickname)}</b><span>${d.toLocaleString('ja-JP')}</span></div>
+      <div class="note">${escapeHtml(o.email||'メール未登録')}</div>
+      <div class="items">${escapeHtml(itemsText)}</div>
+      ${o.note ? `<div class="note">メモ: ${escapeHtml(o.note)}</div>` : ''}
+      <div class="tag-row">
+        <button class="status-pill status-未処理" onclick="setStatus('${o.id}','未処理')">未処理</button>
+        <button class="status-pill status-対応中" onclick="setStatus('${o.id}','対応中')">対応中</button>
+        <button class="status-pill status-完了" onclick="setStatus('${o.id}','完了')">完了</button>
+        <a class="btn ghost" style="text-decoration:none;" href="mailto:kuanfuf@gmail.com?subject=${encodeURIComponent('【みねんこ】新規注文 '+o.nickname)}&body=${mailBody}">✉ メールで送る</a>
+      </div>
+      <div class="note">状態: <b class="status-${o.status}" style="padding:2px 8px; border-radius:8px;">${o.status}</b></div>
+    </div>`;
+  }).join('');
+}
+async function setStatus(id, status){
+  let orders = await sget('minenko:orders', true) || [];
+  orders = orders.map(o=> o.id===id ? {...o, status} : o);
+  await sset('minenko:orders', orders, true);
+  renderAdminOrders();
+}
+document.getElementById('admin-refresh').addEventListener('click', renderAdminOrders);
+
+// ---------- desktop notification polling ----------
+let lastOrderCount = null;
+document.getElementById('notif-enable').addEventListener('click', async ()=>{
+  if(!('Notification' in window)){ alert('このブラウザは通知に対応していません。'); return; }
+  const perm = await Notification.requestPermission();
+  if(perm !== 'granted'){ alert('通知が許可されませんでした。ブラウザ設定を確認してください。'); return; }
+  const btn = document.getElementById('notif-enable');
+  btn.textContent = '🔔 通知 有効中（このタブを開いたままにしてね）';
+  btn.disabled = true;
+  const orders = await sget('minenko:orders', true) || [];
+  lastOrderCount = orders.length;
+  setInterval(pollOrders, 8000);
+});
+async function pollOrders(){
+  const orders = await sget('minenko:orders', true) || [];
+  if(lastOrderCount === null){ lastOrderCount = orders.length; return; }
+  if(orders.length > lastOrderCount){
+    const newOnes = orders.slice(lastOrderCount);
+    newOnes.forEach(o=>{
+      const itemsText = o.items.map(i=>`${i.name}×${i.qty}`).join(' / ');
+      new Notification('🛒 新しい注文！', { body: `${o.nickname} さんより：${itemsText}` });
+    });
+    beep();
+    if(document.getElementById('tab-admin').style.display!=='none') renderAdminOrders();
+  }
+  lastOrderCount = orders.length;
+}
+function beep(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type='square'; o.frequency.value=880;
+    o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    o.start(); o.stop(ctx.currentTime+0.15);
+  }catch(e){}
+}
+
+// ---------- utils ----------
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+
+// init
+loadRegisterList();
+</script>
+</body>
+</html>
