@@ -192,12 +192,12 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div id="reg-form-wrap">
       <h2>登録</h2>
       <label>ニックネーム（表示名） *</label>
-      <input type="text" id="reg-nickname" placeholder="例：たろう">
+      <input type="text" id="reg-nickname" placeholder="例：たろう" autocomplete="off">
       <label>メールアドレス *</label>
-      <input type="text" id="reg-email" placeholder="例：taro@example.com">
+      <input type="text" id="reg-email" placeholder="例：taro@example.com" autocomplete="off">
       <div class="note">注文確認の連絡に使うので、正確に入力してください。</div>
       <label>マイクラのID / 名前（あれば）</label>
-      <input type="text" id="reg-mcid" placeholder="例：Taro_MC">
+      <input type="text" id="reg-mcid" placeholder="例：Taro_MC" autocomplete="off">
       <button class="btn" id="reg-submit">登録する</button>
       <div class="note" id="reg-msg"></div>
     </div>
@@ -242,7 +242,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div id="admin-gate">
       <h2>管理画面ログイン</h2>
       <label>管理者パスワード</label>
-      <input type="password" id="admin-pin-input" placeholder="パスワードを入力">
+      <input type="password" id="admin-pin-input" placeholder="パスワードを入力" autocomplete="new-password">
       <button class="btn" id="admin-login">ログイン</button>
       <div class="note" id="admin-login-msg"></div>
     </div>
@@ -314,7 +314,10 @@ const JSONBLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
 async function remoteGetAll(){
   if(!REMOTE_DB_READY) return null;
   try{
-    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}`, { headers:{'Accept':'application/json'} });
+    const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers:{'Accept':'application/json'}
+    });
     if(!res.ok) return null;
     return await res.json();
   }catch(e){ console.error('remote get failed', e); return null; }
@@ -324,6 +327,7 @@ async function remoteSetAll(data){
   try{
     const res = await fetch(`${JSONBLOB_BASE}/${REMOTE_DB_ID}`, {
       method:'PUT',
+      cache: 'no-store',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(data)
     });
@@ -620,10 +624,12 @@ async function sendOrderEmail(order){
 let adminLoggedIn = false;
 const ADMIN_PASSWORD = 'kansuke1102';
 document.getElementById('admin-login').addEventListener('click', ()=>{
-  const input = document.getElementById('admin-pin-input').value;
+  const pinInput = document.getElementById('admin-pin-input');
+  const input = pinInput.value;
   const msg = document.getElementById('admin-login-msg');
   if(input === ADMIN_PASSWORD){
     adminLoggedIn = true;
+    pinInput.value = '';
     document.getElementById('admin-gate').style.display='none';
     document.getElementById('admin-body').style.display='block';
     loadAdmin();
@@ -811,6 +817,16 @@ function escapeAttr(s){ return escapeHtml(s); }
 
 // init
 loadRegisterList();
+
+// タブに戻ってきた時に最新データを取り直す
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible') return;
+  const activeBtn = document.querySelector('nav button.active');
+  const current = activeBtn ? activeBtn.dataset.tab : 'home';
+  if(current==='shop') loadShop();
+  if(current==='register'){ loadRegisterList(); checkMyRegistration(); loadAnnouncements(); }
+  if(current==='admin' && adminLoggedIn) loadAdmin();
+});
 </script>
 </body>
 </html>
