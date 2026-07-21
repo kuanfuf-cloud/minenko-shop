@@ -56,11 +56,11 @@ body{
 /* nav */
 nav{
   max-width:720px; margin:0 auto 20px; display:grid;
-  grid-template-columns:repeat(4,1fr); gap:8px;
+  grid-template-columns:repeat(5,1fr); gap:6px;
 }
 nav button{
-  font-family:inherit; font-size:0.75rem; font-weight:700;
-  padding:12px 4px; cursor:pointer; color:var(--paper);
+  font-family:inherit; font-size:0.68rem; font-weight:700;
+  padding:11px 3px; cursor:pointer; color:var(--paper);
   background:var(--wood);
   border:3px solid; border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light);
   border-radius:4px;
@@ -172,6 +172,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 
 <nav>
   <button data-tab="home" class="active">🏠 ホーム</button>
+  <button data-tab="announcements">📢 お知らせ</button>
   <button data-tab="register">📝 登録</button>
   <button data-tab="shop">🛒 ショップ</button>
   <button data-tab="admin">⚙️ 設定</button>
@@ -186,14 +187,19 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       みねんこオンラインショップへようこそ。<br>
       Minecraftのマルチサーバーで使える、アイテムの注文専用ページです。
     </p>
-    <h2 id="home-ann-heading" style="margin-top:20px; display:none;">お知らせ</h2>
-    <div id="home-announcements" style="margin-bottom:18px;"></div>
     <div class="tag-row">
       <span class="tag">① まず「登録」でニックネームを登録</span>
       <span class="tag">② 「ショップ」で欲しいアイテムを選ぶ</span>
       <span class="tag">③ 注文するとお店に通知が届く</span>
     </div>
     <button class="btn" onclick="goTab('register')">まず登録しよう →</button>
+  </section>
+
+  <!-- ANNOUNCEMENTS -->
+  <section class="panel tab-content" id="tab-announcements" style="display:none;">
+    <h2>📢 お知らせ</h2>
+    <div id="home-announcements"></div>
+    <div class="note" id="ann-empty-note">お知らせはまだありません。</div>
   </section>
 
   <!-- REGISTER -->
@@ -249,6 +255,12 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div class="note">好きな配色を選べます。この端末だけの設定です。</div>
     <div class="tag-row" id="theme-picker" style="margin-top:10px;"></div>
 
+    <h2 style="margin-top:28px;">💬 ご意見・要望</h2>
+    <div class="note">「こんな機能欲しい」「ここ直してほしい」などお気軽にどうぞ。管理者に届きます。</div>
+    <textarea id="fb-text" rows="3" placeholder="例：ショップに検索機能が欲しいです" style="margin-top:8px;"></textarea>
+    <button class="btn ghost" id="fb-submit" style="margin-top:8px;">送信する</button>
+    <div class="note" id="fb-msg"></div>
+
     <h2 style="margin-top:28px;">管理者ログイン</h2>
     <div id="admin-gate">
       <label>管理者パスワード</label>
@@ -282,11 +294,14 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn ghost" id="cfg-save">メール設定を保存</button>
       <div class="note" id="cfg-msg"></div>
 
+      <h2 style="margin-top:24px;">💬 いただいたご意見</h2>
+      <div id="admin-feedback"><span class="note">読み込み中...</span></div>
+
       <h2 style="margin-top:24px;">👤 メンバー管理</h2>
       <div id="admin-users"><span class="note">読み込み中...</span></div>
 
       <h2 style="margin-top:24px;">📢 お知らせ管理</h2>
-      <div class="note">ここで追加したお知らせは、みんなの「ホーム」タブに大きく表示されます。</div>
+      <div class="note">ここで追加したお知らせは、みんなの「お知らせ」タブに大きく表示されます。</div>
       <div id="admin-announcements"></div>
       <textarea id="ann-text" rows="2" placeholder="例：明日20時〜21時は受け渡し休みます" style="margin-top:8px;"></textarea>
       <button class="btn ghost" id="ann-add" style="margin-top:8px;">お知らせを追加</button>
@@ -315,7 +330,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.4 (2026-07-21)</div>
+<div class="version-badge">v2.6 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -402,7 +417,7 @@ function goTab(name){
   document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
   document.getElementById('tab-'+name).style.display='block';
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  if(name==='home') loadAnnouncements();
+  if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
@@ -471,6 +486,45 @@ async function loadRegisterList(){
   el.innerHTML = users.length ? users.map(u=>`<span class="tag">${escapeHtml(u.nickname)}</span>`).join('') : '<span class="note">まだ誰も登録していません。</span>';
 }
 
+// ---------- feedback ----------
+async function getFeedback(){
+  let f = await sget('minenko:feedback', true);
+  if(!f){ f = []; await sset('minenko:feedback', f, true); }
+  return f;
+}
+document.getElementById('fb-submit').addEventListener('click', async ()=>{
+  const text = document.getElementById('fb-text').value.trim();
+  const msg = document.getElementById('fb-msg');
+  if(!text) return;
+  const mine = await sget('minenko:my_registration', false);
+  const nickname = (mine && mine.nickname) ? mine.nickname : '名無し';
+  let list = await getFeedback();
+  list.push({ id: uid(), nickname, text, ts: Date.now() });
+  const ok = await sset('minenko:feedback', list, true);
+  document.getElementById('fb-text').value = '';
+  msg.innerHTML = ok
+    ? '<span class="ok">送信しました！ありがとうございます。</span>'
+    : '<span class="err">⚠️ 送信に失敗しました。もう一度お試しください。</span>';
+});
+function renderAdminFeedback(list){
+  const el = document.getElementById('admin-feedback');
+  if(!list.length){ el.innerHTML = '<div class="note">まだご意見はありません。</div>'; return; }
+  el.innerHTML = list.slice().reverse().map(f=>{
+    const d = new Date(f.ts);
+    return `<div class="order-card">
+      <div class="top"><b>${escapeHtml(f.nickname)}</b><span>${d.toLocaleString('ja-JP')}</span></div>
+      <div class="items">${escapeHtml(f.text)}</div>
+      <a href="javascript:void(0)" onclick="deleteFeedback('${f.id}')" style="color:#ff8b7d; font-size:0.75rem;">✕ 削除</a>
+    </div>`;
+  }).join('');
+}
+async function deleteFeedback(id){
+  let list = await getFeedback();
+  list = list.filter(f=>f.id!==id);
+  await sset('minenko:feedback', list, true);
+  renderAdminFeedback(list);
+}
+
 // ---------- announcements ----------
 async function getAnnouncements(){
   let a = await sget('minenko:announcements', true);
@@ -480,8 +534,8 @@ async function getAnnouncements(){
 async function loadAnnouncements(){
   const anns = await getAnnouncements();
   const el = document.getElementById('home-announcements');
-  const heading = document.getElementById('home-ann-heading');
-  heading.style.display = anns.length ? 'block' : 'none';
+  const emptyNote = document.getElementById('ann-empty-note');
+  emptyNote.style.display = anns.length ? 'none' : 'block';
   el.innerHTML = anns.length
     ? anns.slice().reverse().map(a=>`
         <div style="background:var(--wood); border:2px solid var(--gold); border-radius:8px; padding:16px 18px; margin-bottom:12px;">
@@ -675,6 +729,8 @@ async function loadAdmin(){
     document.getElementById('cfg-template').value = cfg.templateId||'';
     document.getElementById('cfg-key').value = cfg.publicKey||'';
   }
+  // feedback
+  renderAdminFeedback(await getFeedback());
   // members
   await renderAdminUsers();
   // announcements
@@ -887,7 +943,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(Date.now() - lastLocalWriteTs < 4000) return; // 保存直後の上書きを防ぐ
   const activeBtn = document.querySelector('nav button.active');
   const current = activeBtn ? activeBtn.dataset.tab : 'home';
-  if(current==='home') loadAnnouncements();
+  if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
   if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(current==='admin' && adminLoggedIn) loadAdmin();
