@@ -119,6 +119,11 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
   position:relative;
 }
 .slot.selected{ outline:2px solid var(--gold); outline-offset:-2px; background:#3a2c1a; }
+.slot.sold-out{ opacity:0.45; cursor:not-allowed; filter:grayscale(70%); }
+.sold-out-badge{
+  position:absolute; top:2px; left:2px; background:var(--redstone); color:#fff;
+  font-size:0.58rem; padding:1px 5px; border-radius:6px; font-weight:700;
+}
 .slot .icon{ font-size:1.6rem; }
 .slot .name{ font-size:0.72rem; margin-top:6px; min-height:2.4em; }
 .slot .cat{ font-size:0.65rem; color:var(--diamond); margin-top:4px; opacity:0.85; }
@@ -153,6 +158,31 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
 .tag{ font-size:0.7rem; background:var(--wood); padding:3px 8px; border-radius:10px; }
 
 footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
+
+.celebrate-overlay{
+  position:fixed; inset:0; z-index:1100; pointer-events:none;
+  overflow:hidden;
+}
+.celebrate-msg{
+  position:fixed; top:38%; left:50%; transform:translate(-50%,-50%);
+  font-family:'Press Start 2P'; font-size:1.1rem; color:var(--gold);
+  text-shadow:2px 2px 0 var(--ink); text-align:center; padding:0 20px;
+  animation: popIn 0.4s ease, fadeOut 0.6s ease 2.4s forwards;
+}
+.confetti-piece{
+  position:fixed; top:-20px; width:9px; height:14px; opacity:0.9;
+  animation-name: confettiFall; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes confettiFall{
+  to{ transform: translateY(110vh) rotate(360deg); opacity:0.3; }
+}
+@keyframes popIn{
+  from{ transform:translate(-50%,-50%) scale(0.6); opacity:0; }
+  to{ transform:translate(-50%,-50%) scale(1); opacity:1; }
+}
+@keyframes fadeOut{
+  to{ opacity:0; }
+}
 .version-badge{
   position:fixed; right:10px; bottom:10px;
   background:var(--wood); border:2px solid var(--wood-light);
@@ -193,6 +223,9 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <span class="tag">③ 注文するとお店に通知が届く</span>
     </div>
     <button class="btn" onclick="goTab('register')">まず登録しよう →</button>
+
+    <h2 id="ranking-heading" style="margin-top:28px; display:none;">🏆 人気アイテムランキング</h2>
+    <div id="ranking-list"></div>
   </section>
 
   <!-- ANNOUNCEMENTS -->
@@ -249,6 +282,18 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div class="note" id="shop-msg"></div>
   </section>
 
+  <!-- ORDER CONFIRM MODAL -->
+  <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div class="panel" style="max-width:420px; width:100%; margin:0;">
+      <h2>この内容で注文しますか？</h2>
+      <div id="order-confirm-body" style="font-size:0.9rem; line-height:1.7;"></div>
+      <div style="display:flex; gap:10px; margin-top:18px;">
+        <button class="btn ghost" id="order-confirm-cancel" style="flex:1; margin-top:0;">キャンセル</button>
+        <button class="btn" id="order-confirm-ok" style="flex:1; margin-top:0;">確定して注文する</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ADMIN / SETTINGS -->
   <section class="panel tab-content" id="tab-admin" style="display:none;">
     <h2>🎨 テーマ</h2>
@@ -294,6 +339,11 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn ghost" id="cfg-save">メール設定を保存</button>
       <div class="note" id="cfg-msg"></div>
 
+      <h2 style="margin-top:24px;">🏆 ランキング</h2>
+      <div class="note">テスト注文などでランキングが崩れた時、注文データはそのままにランキング表示だけをリセットできます。</div>
+      <button class="btn ghost" id="ranking-reset" style="margin-top:8px;">ランキングをリセットする</button>
+      <div class="note" id="ranking-reset-msg"></div>
+
       <h2 style="margin-top:24px;">💬 いただいたご意見</h2>
       <div id="admin-feedback"><span class="note">読み込み中...</span></div>
 
@@ -330,7 +380,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.6 (2026-07-21)</div>
+<div class="version-badge">v2.9 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -417,6 +467,7 @@ function goTab(name){
   document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
   document.getElementById('tab-'+name).style.display='block';
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='home') loadRanking();
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
@@ -582,8 +633,9 @@ async function loadShop(){
   const products = await getProducts();
   const grid = document.getElementById('shop-grid');
   grid.innerHTML = products.length ? products.map(p=>`
-    <div class="slot" data-id="${p.id}" onclick="tapSlot('${p.id}')">
+    <div class="slot ${p.outOfStock ? 'sold-out' : ''}" data-id="${p.id}" onclick="tapSlot('${p.id}')">
       <div class="qty-badge" id="badge-${p.id}"></div>
+      ${p.outOfStock ? '<div class="sold-out-badge">品切れ中</div>' : ''}
       <div class="icon">${p.icon}</div>
       <div class="name">${escapeHtml(p.name)}</div>
       <div class="cat">${escapeHtml(p.category)}</div>
@@ -592,6 +644,8 @@ async function loadShop(){
   renderCart();
 }
 function tapSlot(id){
+  const p = (window.__products||[]).find(x=>x.id===id);
+  if(p && p.outOfStock) return; // 品切れ中は選べない
   cart[id] = (cart[id]||0) + 1;
   const badge = document.getElementById('badge-'+id);
   badge.textContent = cart[id];
@@ -637,6 +691,33 @@ document.getElementById('shop-submit').addEventListener('click', async ()=>{
     return {name:p.name, category:p.category, qty:cart[id]};
   });
 
+  showOrderConfirm(nickname, items, note);
+});
+
+function showOrderConfirm(nickname, items, note){
+  const modal = document.getElementById('order-confirm-modal');
+  const body = document.getElementById('order-confirm-body');
+  body.innerHTML = `
+    <div style="margin-bottom:10px;"><b>注文者:</b> ${escapeHtml(nickname)}</div>
+    <div style="margin-bottom:10px;"><b>内容:</b><br>${items.map(i=>`・${escapeHtml(i.name)} ×${i.qty}`).join('<br>')}</div>
+    ${note ? `<div><b>メモ:</b> ${escapeHtml(note)}</div>` : ''}
+  `;
+  modal.style.display = 'flex';
+  modal.dataset.pending = JSON.stringify({ nickname, items, note });
+}
+document.getElementById('order-confirm-cancel').addEventListener('click', ()=>{
+  document.getElementById('order-confirm-modal').style.display = 'none';
+});
+document.getElementById('order-confirm-ok').addEventListener('click', async ()=>{
+  const modal = document.getElementById('order-confirm-modal');
+  const pending = JSON.parse(modal.dataset.pending || 'null');
+  modal.style.display = 'none';
+  if(!pending) return;
+  await submitOrder(pending.nickname, pending.items, pending.note);
+});
+
+async function submitOrder(nickname, items, note){
+  const msg = document.getElementById('shop-msg');
   const users = await sget('minenko:users', true) || [];
   const buyer = users.find(u=>u.nickname===nickname);
   const buyerEmail = buyer ? buyer.email : '';
@@ -647,6 +728,7 @@ document.getElementById('shop-submit').addEventListener('click', async ()=>{
 
   if(ok){
     msg.innerHTML = '<span class="ok">注文を送信しました！お店からの連絡を待ってね。</span>';
+    celebrateOrder();
   } else {
     msg.innerHTML = '<span class="err">保存に時間がかかっていますが、お店への通知は送っています。少し待ってからページを更新して確認してください。</span>';
   }
@@ -655,7 +737,27 @@ document.getElementById('shop-submit').addEventListener('click', async ()=>{
 
   // メールは保存の成否に関わらず必ず試みる
   sendOrderEmail(order).catch(e=>console.error('email send error', e));
-});
+}
+
+// ---------- celebration (confetti) ----------
+function celebrateOrder(){
+  const overlay = document.createElement('div');
+  overlay.className = 'celebrate-overlay';
+  overlay.innerHTML = `<div class="celebrate-msg">🎉 ご注文ありがとうございます！ 🎉</div>`;
+  const colors = ['#e7c15a','#5fd0e8','#6f9c3d','#c0453a','#efe6d3'];
+  for(let i=0;i<60;i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = (Math.random()*100) + 'vw';
+    piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+    piece.style.animationDuration = (2 + Math.random()*1.5) + 's';
+    piece.style.animationDelay = (Math.random()*0.4) + 's';
+    piece.style.transform = `rotate(${Math.random()*360}deg)`;
+    overlay.appendChild(piece);
+  }
+  document.body.appendChild(overlay);
+  setTimeout(()=> overlay.remove(), 3200);
+}
 
 // ---------- email via EmailJS REST API (no SDK needed) ----------
 async function sendOrderEmail(order){
@@ -796,10 +898,17 @@ function renderAdminProducts(products){
   const el = document.getElementById('admin-products');
   el.innerHTML = products.length ? products.map(p=>`
     <div class="tag-row" style="margin-bottom:4px;">
-      <span class="tag">${p.icon} ${escapeHtml(p.name)}（${escapeHtml(p.category)}）
+      <span class="tag" style="${p.outOfStock ? 'opacity:0.6;' : ''}">${p.icon} ${escapeHtml(p.name)}（${escapeHtml(p.category)}）${p.outOfStock ? ' 🔴品切れ中' : ''}
+        <a href="javascript:void(0)" onclick="toggleStock('${p.id}')" style="color:var(--diamond); margin-left:8px;">${p.outOfStock ? '在庫ありに戻す' : '品切れにする'}</a>
         <a href="javascript:void(0)" onclick="deleteProduct('${p.id}')" style="color:#ff8b7d; margin-left:8px;">✕</a>
       </span>
     </div>`).join('') : '<div class="note">まだ商品がありません。下から追加してください。</div>';
+}
+async function toggleStock(id){
+  let products = await getProducts();
+  products = products.map(p=> p.id===id ? {...p, outOfStock: !p.outOfStock} : p);
+  await sset('minenko:products', products, true);
+  renderAdminProducts(products);
 }
 async function deleteProduct(id){
   let products = await getProducts();
@@ -813,7 +922,7 @@ document.getElementById('prod-add').addEventListener('click', async ()=>{
   const msg = document.getElementById('prod-msg');
   if(!name) return;
   let products = await getProducts();
-  products.push({id:uid(), icon: CATEGORY_ICON[category] || '📦', name, category});
+  products.push({id:uid(), icon: CATEGORY_ICON[category] || '📦', name, category, outOfStock:false});
   const ok = await sset('minenko:products', products, true);
   renderAdminProducts(products);
   document.getElementById('prod-name').value='';
@@ -932,10 +1041,44 @@ function initTheme(){
   applyTheme(saved);
 }
 
+// ---------- ranking ----------
+async function loadRanking(){
+  const orders = await sget('minenko:orders', true) || [];
+  const resetTs = await sget('minenko:ranking_reset_ts', true) || 0;
+  const counts = {};
+  orders.filter(o => o.ts > resetTs).forEach(o=>{
+    (o.items||[]).forEach(i=>{
+      counts[i.name] = (counts[i.name]||0) + (i.qty||0);
+    });
+  });
+  const ranked = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const heading = document.getElementById('ranking-heading');
+  const list = document.getElementById('ranking-list');
+  if(!ranked.length){ heading.style.display='none'; list.innerHTML=''; return; }
+  heading.style.display = 'block';
+  const medals = ['🥇','🥈','🥉','④','⑤'];
+  list.innerHTML = ranked.map(([name,qty],i)=>`
+    <div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:8px 0;">
+      <span>${medals[i]} ${escapeHtml(name)}</span>
+      <span style="color:var(--gold); font-weight:700;">${qty}個</span>
+    </div>`).join('');
+}
+document.getElementById('ranking-reset').addEventListener('click', async ()=>{
+  const msg = document.getElementById('ranking-reset-msg');
+  const sure = confirm('リセットしますか？\n（注文データ自体は消えません。ランキングの集計だけ、今からやり直しになります）');
+  if(!sure) return;
+  const ok = await sset('minenko:ranking_reset_ts', Date.now(), true);
+  msg.innerHTML = ok
+    ? '<span class="ok">ランキングをリセットしました。</span>'
+    : '<span class="err">⚠️ リセットに失敗しました。もう一度お試しください。</span>';
+  loadRanking();
+});
+
 // init
 initTheme();
 loadRegisterList();
 loadAnnouncements();
+loadRanking();
 
 // タブに戻ってきた時に最新データを取り直す
 document.addEventListener('visibilitychange', ()=>{
@@ -943,6 +1086,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(Date.now() - lastLocalWriteTs < 4000) return; // 保存直後の上書きを防ぐ
   const activeBtn = document.querySelector('nav button.active');
   const current = activeBtn ? activeBtn.dataset.tab : 'home';
+  if(current==='home') loadRanking();
   if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
   if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
