@@ -260,6 +260,8 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <div class="note" id="remote-status" style="margin-top:8px;"></div>
       <button class="btn secondary" id="remote-create" style="margin-top:8px;">共有データベースを作成する（初回のみ）</button>
       <div class="note" id="remote-create-msg"></div>
+      <button class="btn ghost" id="remote-test" style="margin-top:8px;">🔍 接続テストをする</button>
+      <div class="note" id="remote-test-msg"></div>
 
       <h2 style="margin-top:24px;">通知設定</h2>
       <button class="btn secondary" id="notif-enable">🔔 このPCで注文通知を有効にする</button>
@@ -310,7 +312,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v1.8 (2026-07-21)</div>
+<div class="version-badge">v1.9 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
@@ -435,9 +437,13 @@ document.getElementById('reg-submit').addEventListener('click', async ()=>{
     msg.innerHTML = '<span class="err">そのニックネームは既に使われています。別の名前にしてください。</span>'; return;
   }
   users.push({id:uid(), nickname, email, mcid, ts:Date.now()});
-  await sset('minenko:users', users, true);
+  const ok = await sset('minenko:users', users, true);
   await sset('minenko:my_registration', {nickname, email, mcid}, false);
-  msg.innerHTML = '<span class="ok">登録できました！「ショップ」タブから注文できます。</span>';
+  if(ok){
+    msg.innerHTML = '<span class="ok">登録できました！（共有データベースに保存されました）「ショップ」タブから注文できます。</span>';
+  } else {
+    msg.innerHTML = '<span class="err">⚠️ 共有データベースへの保存に失敗しました。この端末だけの一時登録になっています。通信状況を確認してもう一度お試しください。</span>';
+  }
   document.getElementById('reg-nickname').value=''; document.getElementById('reg-email').value=''; document.getElementById('reg-mcid').value='';
   loadRegisterList();
   checkMyRegistration();
@@ -716,6 +722,38 @@ document.getElementById('remote-create').addEventListener('click', async ()=>{
   }catch(e){
     msg.innerHTML = '作成に失敗しました: ' + e.message;
   }
+});
+document.getElementById('remote-test').addEventListener('click', async ()=>{
+  const msg = document.getElementById('remote-test-msg');
+  msg.innerHTML = 'テスト中...';
+  if(!REMOTE_DB_READY){
+    msg.innerHTML = '<span class="err">共有データベースが未設定です（REMOTE_DB_IDが空）。</span>';
+    return;
+  }
+  const testKey = 'minenko:__conn_test__';
+  const testValue = { hello: 'world', ts: Date.now() };
+  let log = [];
+  // 書き込みテスト
+  try{
+    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(testKey)}`, {
+      method:'POST',
+      cache:'no-store',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify(testValue)
+    });
+    log.push(`書き込み: HTTP ${res.status} ${res.ok ? 'OK' : 'NG'}`);
+  }catch(e){
+    log.push(`書き込み: 失敗（${e.message}）※これがCORSやネットワーク遮断のサインです`);
+  }
+  // 読み込みテスト
+  try{
+    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(testKey)}?_=${Date.now()}`, { cache:'no-store' });
+    const text = await res.text();
+    log.push(`読み込み: HTTP ${res.status} ${res.ok ? 'OK' : 'NG'}（内容: ${text.slice(0,60)}）`);
+  }catch(e){
+    log.push(`読み込み: 失敗（${e.message}）`);
+  }
+  msg.innerHTML = log.map(l=>`<div>${escapeHtml(l)}</div>`).join('');
 });
 
 
