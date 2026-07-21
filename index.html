@@ -190,6 +190,27 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
   font-size:0.65rem; padding:3px 9px; border-radius:6px;
   font-family:'M PLUS Rounded 1c'; z-index:999; pointer-events:none;
 }
+
+/* ---------- mobile mode ---------- */
+body.mobile-mode{ font-size:17px; }
+body.mobile-mode nav{ grid-template-columns:repeat(5,1fr); gap:5px; }
+body.mobile-mode nav button{ font-size:0.6rem; padding:14px 2px; line-height:1.3; }
+body.mobile-mode .panel{ padding:18px 14px; }
+body.mobile-mode .btn{ padding:16px 18px; font-size:1.05rem; width:100%; }
+body.mobile-mode .btn.ghost, body.mobile-mode .btn.secondary{ width:auto; }
+body.mobile-mode input[type=text], body.mobile-mode input[type=password],
+body.mobile-mode textarea, body.mobile-mode select{
+  font-size:16px; padding:14px 12px;
+}
+body.mobile-mode .inv-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px; }
+body.mobile-mode .slot{ padding:14px 10px; }
+body.mobile-mode .slot .icon{ font-size:2rem; }
+body.mobile-mode .slot .name{ font-size:0.85rem; }
+body.mobile-mode .cart-row input[type=number]{ font-size:16px; padding:10px 6px; width:60px; }
+body.mobile-mode .cart-row button.btn.ghost{ padding:10px 14px; font-size:0.85rem; }
+body.mobile-mode .order-card{ padding:16px; }
+body.mobile-mode .status-pill{ padding:8px 16px; font-size:0.85rem; }
+body.mobile-mode label{ font-size:0.95rem; }
 </style>
 </head>
 <body>
@@ -300,6 +321,10 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div class="note">好きな配色を選べます。この端末だけの設定です。</div>
     <div class="tag-row" id="theme-picker" style="margin-top:10px;"></div>
 
+    <h2 style="margin-top:28px;">📱 表示モード</h2>
+    <div class="note">スマホで文字やボタンが小さくて押しにくい時はこれをON。この端末だけの設定です。</div>
+    <button class="btn secondary" id="mobile-mode-toggle" style="margin-top:8px;">スマホモード：OFF</button>
+
     <h2 style="margin-top:28px;">💬 ご意見・要望</h2>
     <div class="note">「こんな機能欲しい」「ここ直してほしい」などお気軽にどうぞ。管理者に届きます。</div>
     <textarea id="fb-text" rows="3" placeholder="例：ショップに検索機能が欲しいです" style="margin-top:8px;"></textarea>
@@ -380,7 +405,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v3.0 (2026-07-21)</div>
+<div class="version-badge">v3.1 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1063,6 +1088,34 @@ function initTheme(){
   applyTheme(saved);
 }
 
+// ---------- mobile mode ----------
+function setMobileMode(on){
+  document.body.classList.toggle('mobile-mode', on);
+  const btn = document.getElementById('mobile-mode-toggle');
+  if(btn){
+    btn.textContent = 'スマホモード：' + (on ? 'ON' : 'OFF');
+    btn.classList.toggle('secondary', !on);
+  }
+  try{ localStorage.setItem('minenko_mobile_mode', on ? '1' : '0'); }catch(e){}
+}
+function initMobileMode(){
+  let stored = null;
+  try{ stored = localStorage.getItem('minenko_mobile_mode'); }catch(e){}
+  let on;
+  if(stored === null){
+    // 初回訪問：画面幅やUAからスマホらしければ自動でON
+    const looksLikePhone = window.matchMedia('(max-width: 600px)').matches
+      || /iPhone|Android|Mobile/i.test(navigator.userAgent);
+    on = looksLikePhone;
+  } else {
+    on = stored === '1';
+  }
+  setMobileMode(on);
+}
+document.getElementById('mobile-mode-toggle').addEventListener('click', ()=>{
+  setMobileMode(!document.body.classList.contains('mobile-mode'));
+});
+
 // ---------- ranking ----------
 async function loadRanking(){
   const orders = await sget('minenko:orders', true) || [];
@@ -1098,6 +1151,7 @@ document.getElementById('ranking-reset').addEventListener('click', async ()=>{
 
 // init
 initTheme();
+initMobileMode();
 loadRegisterList();
 loadAnnouncements();
 loadRanking();
