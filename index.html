@@ -258,7 +258,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <h2>🌐 共有データベース（全端末で共有）</h2>
       <div class="note">これを設定すると、友だちがどの端末でこのファイルを開いても、登録・注文・商品・お知らせが全員同じデータになります。</div>
       <div class="note" id="remote-status" style="margin-top:8px;"></div>
-      <button class="btn secondary" id="remote-create" style="margin-top:8px;">共有データベースを作成する（初回のみ）</button>
+      <button class="btn secondary" id="remote-create" style="margin-top:8px;">共有データベースを新しく作成する（テスト用にいつでも可）</button>
       <div class="note" id="remote-create-msg"></div>
       <button class="btn ghost" id="remote-test" style="margin-top:8px;">🔍 接続テストをする</button>
       <div class="note" id="remote-test-msg"></div>
@@ -312,7 +312,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v1.9 (2026-07-21)</div>
+<div class="version-badge">v2.0 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
@@ -702,10 +702,6 @@ async function deleteUser(id){
 }
 document.getElementById('remote-create').addEventListener('click', async ()=>{
   const msg = document.getElementById('remote-create-msg');
-  if(REMOTE_DB_READY){
-    msg.innerHTML = '<span class="ok">すでに設定済みです。</span>';
-    return;
-  }
   msg.textContent = '作成中...';
   try{
     const res = await fetch('https://kvdb.io', {
@@ -715,9 +711,9 @@ document.getElementById('remote-create').addEventListener('click', async ()=>{
     });
     const id = (await res.text()).trim();
     if(id && res.ok){
-      msg.innerHTML = `作成できました！このIDをそのままClaudeに伝えてください → <b>${id}</b>`;
+      msg.innerHTML = `作成できました（HTTP ${res.status}）！このIDをそのままClaudeに伝えてください → <b>${id}</b>`;
     } else {
-      msg.innerHTML = '作成に失敗しました。もう一度お試しください。';
+      msg.innerHTML = `作成に失敗しました（HTTP ${res.status}）。もう一度お試しください。`;
     }
   }catch(e){
     msg.innerHTML = '作成に失敗しました: ' + e.message;
