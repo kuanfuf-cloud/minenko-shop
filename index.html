@@ -299,6 +299,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
         <input type="text" id="prod-name" placeholder="商品名">
       </div>
       <button class="btn ghost" id="prod-add" style="margin-top:10px;">商品を追加</button>
+      <div class="note" id="prod-msg"></div>
 
       <h2 style="margin-top:24px;">注文一覧</h2>
       <div id="admin-orders"><span class="note">読み込み中...</span></div>
@@ -309,7 +310,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v1.7 (2026-07-19)</div>
+<div class="version-badge">v1.8 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
@@ -319,16 +320,18 @@ const REMOTE_DB_READY = !!(REMOTE_DB_ID && REMOTE_DB_ID !== 'REPLACE_ME');
 const KVDB_BASE = 'https://kvdb.io';
 
 async function remoteGetKey(key){
-  if(!REMOTE_DB_READY) return null;
+  // reached:false = 通信できなかった（ローカルにフォールバックしてよい）
+  // reached:true  = 通信できた（valueがnullでも「共有DBには無い」が正解。ローカルにフォールバックしない）
+  if(!REMOTE_DB_READY) return { reached:false, value:null };
   try{
     const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(key)}?_=${Date.now()}`, {
       cache: 'no-store'
     });
-    if(res.status === 404) return null;
-    if(!res.ok) return null;
+    if(res.status === 404) return { reached:true, value:null };
+    if(!res.ok) return { reached:false, value:null };
     const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  }catch(e){ console.error('remote get failed', e); return null; }
+    return { reached:true, value: text ? JSON.parse(text) : null };
+  }catch(e){ console.error('remote get failed', e); return { reached:false, value:null }; }
 }
 async function remoteSetKey(key, value){
   if(!REMOTE_DB_READY) return false;
@@ -350,8 +353,9 @@ if(!HAS_CLOUD_STORAGE && !REMOTE_DB_READY){
 }
 async function sget(key, shared){
   if(shared && REMOTE_DB_READY){
-    const v = await remoteGetKey(key);
-    if(v !== null) return v;
+    const r = await remoteGetKey(key);
+    if(r.reached) return r.value; // 共有DBに届いたなら、値が無くてもそれが正解（ローカルにフォールバックしない）
+    console.warn('共有データベースに届かなかったため、一時的にこの端末のローカル保存を使います:', key);
   }
   if(HAS_CLOUD_STORAGE){
     try{
@@ -733,12 +737,16 @@ async function deleteProduct(id){
 document.getElementById('prod-add').addEventListener('click', async ()=>{
   const category = document.getElementById('prod-category').value;
   const name = document.getElementById('prod-name').value.trim();
+  const msg = document.getElementById('prod-msg');
   if(!name) return;
   let products = await getProducts();
   products.push({id:uid(), icon: CATEGORY_ICON[category] || '📦', name, category});
-  await sset('minenko:products', products, true);
+  const ok = await sset('minenko:products', products, true);
   renderAdminProducts(products);
   document.getElementById('prod-name').value='';
+  msg.innerHTML = ok
+    ? '<span class="ok">追加しました！（共有データベースに保存されました）</span>'
+    : '<span class="err">⚠️ 共有データベースへの保存に失敗しました。この端末だけの一時保存になっています。もう一度お試しください。</span>';
 });
 
 document.getElementById('cfg-save').addEventListener('click', async ()=>{
