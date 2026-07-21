@@ -186,7 +186,8 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       みねんこオンラインショップへようこそ。<br>
       Minecraftのマルチサーバーで使える、アイテムの注文専用ページです。
     </p>
-    <div id="home-announcements" style="margin:18px 0;"></div>
+    <h2 id="home-ann-heading" style="margin-top:20px; display:none;">お知らせ</h2>
+    <div id="home-announcements" style="margin-bottom:18px;"></div>
     <div class="tag-row">
       <span class="tag">① まず「登録」でニックネームを登録</span>
       <span class="tag">② 「ショップ」で欲しいアイテムを選ぶ</span>
@@ -310,7 +311,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.2 (2026-07-21)</div>
+<div class="version-badge">v2.3 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -475,6 +476,8 @@ async function getAnnouncements(){
 async function loadAnnouncements(){
   const anns = await getAnnouncements();
   const el = document.getElementById('home-announcements');
+  const heading = document.getElementById('home-ann-heading');
+  heading.style.display = anns.length ? 'block' : 'none';
   el.innerHTML = anns.length
     ? anns.slice().reverse().map(a=>`
         <div style="background:var(--wood); border:2px solid var(--gold); border-radius:8px; padding:16px 18px; margin-bottom:12px;">
