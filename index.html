@@ -255,11 +255,9 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div id="admin-body" style="display:none;">
       <div class="note" id="storage-mode-note"></div>
 
-      <h2>🌐 共有データベース（全端末で共有）</h2>
+      <h2>🌐 共有データベース（全端末で共有・Firebase）</h2>
       <div class="note">これを設定すると、友だちがどの端末でこのファイルを開いても、登録・注文・商品・お知らせが全員同じデータになります。</div>
       <div class="note" id="remote-status" style="margin-top:8px;"></div>
-      <button class="btn secondary" id="remote-create" style="margin-top:8px;">共有データベースを新しく作成する（テスト用にいつでも可）</button>
-      <div class="note" id="remote-create-msg"></div>
       <button class="btn ghost" id="remote-test" style="margin-top:8px;">🔍 接続テストをする</button>
       <div class="note" id="remote-test-msg"></div>
 
@@ -312,36 +310,33 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.1 (2026-07-21)</div>
+<div class="version-badge">v2.2 (2026-07-21)</div>
 
 <script>
-// ---------- remote shared storage (KVdb.io, no signup needed, browser-friendly) ----------
-// 管理者が「共有データベースを作成する」ボタンを押した後にもらえるIDをここに貼り付けます
-const REMOTE_DB_ID = '8GZNMoZvzafHrJ1z85X974';
-const REMOTE_DB_READY = !!(REMOTE_DB_ID && REMOTE_DB_ID !== 'REPLACE_ME');
-const KVDB_BASE = 'https://kvdb.io';
+// ---------- remote shared storage (Firebase Realtime Database) ----------
+const FIREBASE_DB_URL = 'https://minenko-shop-default-rtdb.firebaseio.com';
+const REMOTE_DB_READY = !!(FIREBASE_DB_URL && FIREBASE_DB_URL !== 'REPLACE_ME');
 
 async function remoteGetKey(key){
   // reached:false = 通信できなかった（ローカルにフォールバックしてよい）
   // reached:true  = 通信できた（valueがnullでも「共有DBには無い」が正解。ローカルにフォールバックしない）
   if(!REMOTE_DB_READY) return { reached:false, value:null };
   try{
-    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(key)}?_=${Date.now()}`, {
+    const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(key)}.json?_=${Date.now()}`, {
       cache: 'no-store'
     });
-    if(res.status === 404) return { reached:true, value:null };
     if(!res.ok) return { reached:false, value:null };
-    const text = await res.text();
-    return { reached:true, value: text ? JSON.parse(text) : null };
+    const data = await res.json();
+    return { reached:true, value: (data === undefined ? null : data) };
   }catch(e){ console.error('remote get failed', e); return { reached:false, value:null }; }
 }
 async function remoteSetKey(key, value){
   if(!REMOTE_DB_READY) return false;
   try{
-    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(key)}`, {
-      method: 'POST',
+    const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(key)}.json`, {
+      method: 'PUT',
       cache: 'no-store',
-      headers:{'Content-Type':'text/plain'},
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify(value)
     });
     return res.ok;
@@ -664,7 +659,7 @@ async function loadAdmin(){
       ? '<span class="ok">✅ 共有ストレージが有効：友だちの登録・注文がここに反映されます。</span>'
       : '<span class="err">⚠️ まだ「共有データベース」が未設定です。この端末内だけの保存になり、友だちとは共有されません。下の「共有データベースを作成する」から設定してください。</span>');
   document.getElementById('remote-status').innerHTML = REMOTE_DB_READY
-    ? `<span class="ok">設定済み（データベースID: ${REMOTE_DB_ID}）</span>`
+    ? `<span class="ok">設定済み（Firebase: ${FIREBASE_DB_URL}）</span>`
     : '<span class="err">未設定</span>';
   // config
   const cfg = await getEmailConfig();
@@ -700,30 +695,11 @@ async function deleteUser(id){
   await sset('minenko:users', users, true);
   renderAdminUsers();
 }
-document.getElementById('remote-create').addEventListener('click', async ()=>{
-  const msg = document.getElementById('remote-create-msg');
-  msg.textContent = '作成中...';
-  try{
-    const res = await fetch('https://kvdb.io', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: 'email=kuanfuf@gmail.com'
-    });
-    const id = (await res.text()).trim();
-    if(id && res.ok){
-      msg.innerHTML = `作成できました（HTTP ${res.status}）！このIDをそのままClaudeに伝えてください → <b>${id}</b>`;
-    } else {
-      msg.innerHTML = `作成に失敗しました（HTTP ${res.status}）。もう一度お試しください。`;
-    }
-  }catch(e){
-    msg.innerHTML = '作成に失敗しました: ' + e.message;
-  }
-});
 document.getElementById('remote-test').addEventListener('click', async ()=>{
   const msg = document.getElementById('remote-test-msg');
   msg.innerHTML = 'テスト中...';
   if(!REMOTE_DB_READY){
-    msg.innerHTML = '<span class="err">共有データベースが未設定です（REMOTE_DB_IDが空）。</span>';
+    msg.innerHTML = '<span class="err">共有データベースが未設定です。</span>';
     return;
   }
   const testKey = 'minenko:__conn_test__';
@@ -731,10 +707,10 @@ document.getElementById('remote-test').addEventListener('click', async ()=>{
   let log = [];
   // 書き込みテスト
   try{
-    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(testKey)}`, {
-      method:'POST',
+    const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(testKey)}.json`, {
+      method:'PUT',
       cache:'no-store',
-      headers:{'Content-Type':'text/plain'},
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify(testValue)
     });
     log.push(`書き込み: HTTP ${res.status} ${res.ok ? 'OK' : 'NG'}`);
@@ -743,9 +719,9 @@ document.getElementById('remote-test').addEventListener('click', async ()=>{
   }
   // 読み込みテスト
   try{
-    const res = await fetch(`${KVDB_BASE}/${REMOTE_DB_ID}/${encodeURIComponent(testKey)}?_=${Date.now()}`, { cache:'no-store' });
+    const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(testKey)}.json?_=${Date.now()}`, { cache:'no-store' });
     const text = await res.text();
-    log.push(`読み込み: HTTP ${res.status} ${res.ok ? 'OK' : 'NG'}（内容: ${text.slice(0,60)}）`);
+    log.push(`読み込み: HTTP ${res.status} ${res.ok ? 'OK' : 'NG'}（内容: ${text.slice(0,80)}）`);
   }catch(e){
     log.push(`読み込み: 失敗（${e.message}）`);
   }
