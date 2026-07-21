@@ -380,7 +380,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.9 (2026-07-21)</div>
+<div class="version-badge">v3.0 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -647,10 +647,7 @@ function tapSlot(id){
   const p = (window.__products||[]).find(x=>x.id===id);
   if(p && p.outOfStock) return; // 品切れ中は選べない
   cart[id] = (cart[id]||0) + 1;
-  const badge = document.getElementById('badge-'+id);
-  badge.textContent = cart[id];
-  badge.classList.add('show');
-  document.querySelector(`.slot[data-id="${id}"]`).classList.add('selected');
+  syncSlotBadge(id);
   renderCart();
 }
 function renderCart(){
@@ -662,20 +659,45 @@ function renderCart(){
   ids.forEach(id=>{
     const p = products.find(x=>x.id===id);
     if(!p) return;
-    html += `<div class="cart-row"><span>${escapeHtml(p.icon)} ${escapeHtml(p.name)} × ${cart[id]}</span>
-      <span><button class="btn ghost" style="padding:2px 8px; font-size:0.7rem;" onclick="removeOne('${id}')">−1</button></span></div>`;
+    html += `<div class="cart-row" style="align-items:center;">
+      <span>${escapeHtml(p.icon)} ${escapeHtml(p.name)}</span>
+      <span style="display:flex; align-items:center; gap:4px;">
+        <button class="btn ghost" style="padding:2px 8px; font-size:0.7rem; margin-top:0;" onclick="changeQty('${id}',-1)">−</button>
+        <input type="number" min="0" value="${cart[id]}" onchange="setQty('${id}',this.value)"
+          style="width:52px; text-align:center; padding:4px 2px;">
+        <button class="btn ghost" style="padding:2px 8px; font-size:0.7rem; margin-top:0;" onclick="changeQty('${id}',1)">＋</button>
+        <button class="btn ghost" style="padding:2px 8px; font-size:0.7rem; margin-top:0;" onclick="changeQty('${id}',5)">+5</button>
+      </span>
+    </div>`;
   });
   box.innerHTML = html;
 }
-function removeOne(id){
-  cart[id] = Math.max(0, (cart[id]||0)-1);
+function syncSlotBadge(id){
   const badge = document.getElementById('badge-'+id);
-  if(cart[id]<=0){
-    badge.classList.remove('show'); badge.textContent='';
-    document.querySelector(`.slot[data-id="${id}"]`)?.classList.remove('selected');
-  } else { badge.textContent = cart[id]; }
+  const slot = document.querySelector(`.slot[data-id="${id}"]`);
+  if(!badge) return;
+  if((cart[id]||0) > 0){
+    badge.textContent = cart[id];
+    badge.classList.add('show');
+    slot?.classList.add('selected');
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('show');
+    slot?.classList.remove('selected');
+  }
+}
+function changeQty(id, delta){
+  cart[id] = Math.max(0, (cart[id]||0) + delta);
+  syncSlotBadge(id);
   renderCart();
 }
+function setQty(id, value){
+  const n = Math.max(0, parseInt(value, 10) || 0);
+  cart[id] = n;
+  syncSlotBadge(id);
+  renderCart();
+}
+function removeOne(id){ changeQty(id, -1); }
 
 document.getElementById('shop-submit').addEventListener('click', async ()=>{
   const msg = document.getElementById('shop-msg');
