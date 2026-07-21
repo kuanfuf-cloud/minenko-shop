@@ -174,7 +174,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
   <button data-tab="home" class="active">🏠 ホーム</button>
   <button data-tab="register">📝 登録</button>
   <button data-tab="shop">🛒 ショップ</button>
-  <button data-tab="admin">🔧 管理</button>
+  <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
 <main>
@@ -243,10 +243,14 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div class="note" id="shop-msg"></div>
   </section>
 
-  <!-- ADMIN -->
+  <!-- ADMIN / SETTINGS -->
   <section class="panel tab-content" id="tab-admin" style="display:none;">
+    <h2>🎨 テーマ</h2>
+    <div class="note">好きな配色を選べます。この端末だけの設定です。</div>
+    <div class="tag-row" id="theme-picker" style="margin-top:10px;"></div>
+
+    <h2 style="margin-top:28px;">管理者ログイン</h2>
     <div id="admin-gate">
-      <h2>管理画面ログイン</h2>
       <label>管理者パスワード</label>
       <input type="password" id="admin-pin-input" placeholder="パスワードを入力" autocomplete="new-password">
       <button class="btn" id="admin-login">ログイン</button>
@@ -311,7 +315,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v2.3 (2026-07-21)</div>
+<div class="version-badge">v2.4 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -844,7 +848,36 @@ function beep(){
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s){ return escapeHtml(s); }
 
+// ---------- theme ----------
+const THEMES = {
+  '森の夜': { '--bg-deep':'#161210', '--bg-panel':'#241b14', '--wood':'#3d2b1d', '--wood-light':'#5a4030', '--grass':'#6f9c3d', '--grass-dark':'#4f7229', '--diamond':'#5fd0e8', '--gold':'#e7c15a' },
+  'ダイヤモンド': { '--bg-deep':'#0c1620', '--bg-panel':'#132433', '--wood':'#1f3a4d', '--wood-light':'#2f5468', '--grass':'#3fb7c9', '--grass-dark':'#2c8a99', '--diamond':'#8be9f2', '--gold':'#e7c15a' },
+  'ネザー': { '--bg-deep':'#1c0e0e', '--bg-panel':'#2c1414', '--wood':'#4a1f1f', '--wood-light':'#6b2c2c', '--grass':'#c0453a', '--grass-dark':'#8f302a', '--diamond':'#ff9d5c', '--gold':'#f2c14e' },
+  '桜': { '--bg-deep':'#1c1417', '--bg-panel':'#2b1e23', '--wood':'#4a2f38', '--wood-light':'#6b4652', '--grass':'#e08fa8', '--grass-dark':'#c06a86', '--diamond':'#f5b8cd', '--gold':'#f2d1a5' },
+  'エメラルド': { '--bg-deep':'#0f1a12', '--bg-panel':'#17281c', '--wood':'#25402c', '--wood-light':'#396443', '--grass':'#3fbf6b', '--grass-dark':'#2c9450', '--diamond':'#7ee8a8', '--gold':'#e7c15a' }
+};
+function applyTheme(name){
+  const t = THEMES[name];
+  if(!t) return;
+  Object.entries(t).forEach(([k,v])=> document.documentElement.style.setProperty(k, v));
+  try{ localStorage.setItem('minenko_theme', name); }catch(e){}
+  renderThemePicker(name);
+}
+function renderThemePicker(active){
+  const el = document.getElementById('theme-picker');
+  if(!el) return;
+  el.innerHTML = Object.keys(THEMES).map(name=>`
+    <span class="tag" style="cursor:pointer; ${name===active ? 'outline:2px solid var(--gold);' : ''}" onclick="applyTheme('${name}')">${name}${name===active ? ' ✓' : ''}</span>
+  `).join('');
+}
+function initTheme(){
+  let saved = '森の夜';
+  try{ saved = localStorage.getItem('minenko_theme') || saved; }catch(e){}
+  applyTheme(saved);
+}
+
 // init
+initTheme();
 loadRegisterList();
 loadAnnouncements();
 
