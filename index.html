@@ -325,6 +325,10 @@ body.mobile-mode label{ font-size:0.95rem; }
     <div class="note">スマホで文字やボタンが小さくて押しにくい時はこれをON。この端末だけの設定です。</div>
     <button class="btn secondary" id="mobile-mode-toggle" style="margin-top:8px;">スマホモード：OFF</button>
 
+    <h2 style="margin-top:28px;">🔊 ボタン音</h2>
+    <div class="note">ボタンを押すたびにマイクラ風のクリック音が鳴ります。うるさい時はOFFに。</div>
+    <button class="btn secondary" id="click-sound-toggle" style="margin-top:8px;">🔊 ボタン音：ON</button>
+
     <h2 style="margin-top:28px;">💬 ご意見・要望</h2>
     <div class="note">「こんな機能欲しい」「ここ直してほしい」などお気軽にどうぞ。管理者に届きます。</div>
     <textarea id="fb-text" rows="3" placeholder="例：ショップに検索機能が欲しいです" style="margin-top:8px;"></textarea>
@@ -405,7 +409,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v3.1 (2026-07-21)</div>
+<div class="version-badge">v3.4 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1056,6 +1060,68 @@ function beep(){
   }catch(e){}
 }
 
+// ---------- click sound (Minecraft風ボタン音) ----------
+let clickSoundOn = true;
+let _audioCtx = null;
+function getAudioCtx(){
+  if(!_audioCtx){
+    try{ _audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  return _audioCtx;
+}
+function playClickSound(){
+  if(!clickSoundOn) return;
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    if(ctx.state === 'suspended') ctx.resume();
+    // 減衰するノイズ（「カチッ」の質感）
+    const dur = 0.025;
+    const bufferSize = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++){
+      data[i] = (Math.random()*2-1) * Math.pow(1 - i/bufferSize, 4);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.35, ctx.currentTime);
+    noise.connect(noiseGain); noiseGain.connect(ctx.destination);
+    noise.start();
+
+    // 高めの短いティック音を重ねてクリック感を強調
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(1400, ctx.currentTime);
+    g.gain.setValueAtTime(0.06, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.02);
+  }catch(e){}
+}
+function setClickSound(on){
+  clickSoundOn = on;
+  const btn = document.getElementById('click-sound-toggle');
+  if(btn) btn.textContent = on ? '🔊 ボタン音：ON（タップでオフにする）' : '🔇 ボタン音：OFF（タップでオンにする）';
+  try{ localStorage.setItem('minenko_click_sound', on ? '1' : '0'); }catch(e){}
+}
+function initClickSound(){
+  let on = true;
+  try{
+    const stored = localStorage.getItem('minenko_click_sound');
+    if(stored !== null) on = stored === '1';
+  }catch(e){}
+  setClickSound(on);
+}
+document.getElementById('click-sound-toggle').addEventListener('click', ()=>{
+  setClickSound(!clickSoundOn);
+});
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest('button, .slot, .status-pill');
+  if(el && !el.disabled) playClickSound();
+}, true);
+
 // ---------- utils ----------
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s){ return escapeHtml(s); }
@@ -1093,8 +1159,7 @@ function setMobileMode(on){
   document.body.classList.toggle('mobile-mode', on);
   const btn = document.getElementById('mobile-mode-toggle');
   if(btn){
-    btn.textContent = 'スマホモード：' + (on ? 'ON' : 'OFF');
-    btn.classList.toggle('secondary', !on);
+    btn.textContent = on ? '📱 スマホモード：ON（タップでオフにする）' : '📱 スマホモード：OFF（タップでオンにする）';
   }
   try{ localStorage.setItem('minenko_mobile_mode', on ? '1' : '0'); }catch(e){}
 }
@@ -1152,6 +1217,7 @@ document.getElementById('ranking-reset').addEventListener('click', async ()=>{
 // init
 initTheme();
 initMobileMode();
+initClickSound();
 loadRegisterList();
 loadAnnouncements();
 loadRanking();
