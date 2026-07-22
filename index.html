@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>みねんこオンラインショップ</title>
+<title>スナーク帝国 ホームページ</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap');
 
@@ -80,6 +80,19 @@ main{ max-width:720px; margin:0 auto; }
   padding:22px 20px;
   margin-bottom:16px;
 }
+.tab-content{
+  transition: transform 0.22s cubic-bezier(.4,0,.2,1), opacity 0.22s ease;
+  transform: translateX(0); opacity:1;
+}
+.tab-content.slide-out-left{ transform:translateX(-26px); opacity:0; }
+.tab-content.slide-out-right{ transform:translateX(26px); opacity:0; }
+.tab-content.slide-in-prep-left{ transform:translateX(-26px); opacity:0; transition:none; }
+.tab-content.slide-in-prep-right{ transform:translateX(26px); opacity:0; transition:none; }
+#order-confirm-modal .panel{
+  animation: popIn 0.22s cubic-bezier(.34,1.56,.64,1);
+}
+.btn, .slot{ transition: transform .1s ease, opacity .15s ease; }
+.slot:active:not(.sold-out){ transform:scale(0.94); }
 .panel h2{
   font-size:0.95rem; margin:0 0 14px; color:var(--diamond);
   display:flex; align-items:center; gap:8px;
@@ -99,7 +112,7 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
   border:3px solid; color:#16210a;
   background:var(--grass); border-color:#8fc65a var(--grass-dark) var(--grass-dark) #8fc65a;
 }
-.btn:active{ transform:translateY(2px); }
+.btn:active{ transform:translateY(2px) scale(0.97); }
 .btn.secondary{ background:var(--diamond); border-color:#a8ecf9 #2e8fa3 #2e8fa3 #a8ecf9; }
 .btn.ghost{ background:var(--wood); color:var(--paper); border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light); font-size:0.8rem; padding:8px 12px;}
 .btn:disabled{ opacity:0.4; cursor:not-allowed; }
@@ -219,8 +232,9 @@ body.mobile-mode label{ font-size:0.95rem; }
 <body>
 
 <div class="hero">
-  <div class="badge pixel">MINECRAFT SHOP</div>
-  <h1 class="pixel">みねんこ<br>オンラインショップ</h1>
+  <div class="badge pixel">SNARK EMPIRE</div>
+  <div class="emblem-wrap"><div class="emblem"></div></div>
+  <h1 class="pixel">スナーク帝国<br>ホームページ</h1>
   <p>サーバー内アイテムの注文はここから。まずは登録してね！</p>
 </div>
 
@@ -412,7 +426,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>みねんこオンラインショップ / Minecraft server use only</footer>
-<div class="version-badge">v3.5 (2026-07-21)</div>
+<div class="version-badge">v3.6 (2026-07-21)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -495,15 +509,48 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-function goTab(name){
-  document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
-  document.getElementById('tab-'+name).style.display='block';
-  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+const TAB_ORDER = ['home','announcements','register','shop','admin'];
+function triggerTabLoad(name){
   if(name==='home') loadRanking();
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
+}
+function goTab(name){
+  const activeBtn = document.querySelector('nav button.active');
+  const currentName = activeBtn ? activeBtn.dataset.tab : null;
+  const nextEl = document.getElementById('tab-'+name);
+  const currentEl = currentName ? document.getElementById('tab-'+currentName) : null;
+
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+
+  if(!currentEl || currentName===name || currentEl.style.display==='none'){
+    document.querySelectorAll('.tab-content').forEach(el=>{
+      if(el!==nextEl){ el.style.display='none'; el.classList.remove('slide-out-left','slide-out-right'); }
+    });
+    nextEl.classList.remove('slide-in-prep-left','slide-in-prep-right');
+    nextEl.style.display='block';
+    triggerTabLoad(name);
+    return;
+  }
+
+  const curIdx = TAB_ORDER.indexOf(currentName);
+  const nextIdx = TAB_ORDER.indexOf(name);
+  const forward = nextIdx > curIdx;
+
+  currentEl.classList.add(forward ? 'slide-out-left' : 'slide-out-right');
+  setTimeout(()=>{
+    currentEl.style.display = 'none';
+    currentEl.classList.remove('slide-out-left','slide-out-right');
+
+    nextEl.classList.add(forward ? 'slide-in-prep-right' : 'slide-in-prep-left');
+    nextEl.style.display = 'block';
+    void nextEl.offsetWidth; // reflow
+    nextEl.classList.remove('slide-in-prep-right','slide-in-prep-left');
+  }, 180);
+
+  triggerTabLoad(name);
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click', ()=>goTab(b.dataset.tab)));
 
