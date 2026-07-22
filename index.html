@@ -286,6 +286,9 @@ body.mobile-mode label{ font-size:0.95rem; }
 
   <!-- HOME -->
   <section class="panel tab-content" id="tab-home">
+    <h2>📜 ルール・注意事項</h2>
+    <div id="rules-content" style="font-size:0.85rem; line-height:2; white-space:pre-wrap; background:var(--wood); border-radius:8px; padding:14px 16px; margin-bottom:22px;"></div>
+
     <h2>ようこそ！</h2>
     <p style="line-height:1.9; font-size:0.9rem;">
       スナーク帝国へようこそ。<br>
@@ -378,7 +381,10 @@ body.mobile-mode label{ font-size:0.95rem; }
 
   <!-- ADMIN / SETTINGS -->
   <section class="panel tab-content" id="tab-admin" style="display:none;">
-    <h2>🎨 テーマ</h2>
+    <h2>📜 ルール・注意事項</h2>
+    <div class="note">「ホーム」タブの一番上に表示されています。内容は下の「ルール・注意事項の編集」からいつでも書き換えられます。</div>
+
+    <h2 style="margin-top:28px;">🎨 テーマ</h2>
     <div class="note">好きな配色を選べます。この端末だけの設定です。</div>
     <div class="tag-row" id="theme-picker" style="margin-top:10px;"></div>
 
@@ -429,6 +435,12 @@ body.mobile-mode label{ font-size:0.95rem; }
       <button class="btn ghost" id="cfg-save">メール設定を保存</button>
       <div class="note" id="cfg-msg"></div>
 
+      <h2 style="margin-top:24px;">📜 ルール・注意事項の編集</h2>
+      <div class="note">ここで編集した内容が、みんなの「ルール・注意事項」ページにそのまま表示されます。</div>
+      <textarea id="rules-edit" rows="8" style="margin-top:8px;"></textarea>
+      <button class="btn ghost" id="rules-save" style="margin-top:8px;">保存する</button>
+      <div class="note" id="rules-save-msg"></div>
+
       <h2 style="margin-top:24px;">📸 ギャラリー管理</h2>
       <div class="note">サーバーのスクショなどをアップロードすると、ホームに表示されます。自動で圧縮されますが、8枚くらいまでを目安にしてください。</div>
       <input type="file" id="gallery-file" accept="image/*" style="margin-top:8px;">
@@ -477,7 +489,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.13 (2026-07-22)</div>
+<div class="version-badge">v3.15 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -562,7 +574,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // ---------- tabs ----------
 const TAB_ORDER = ['home','announcements','register','shop','admin'];
 function triggerTabLoad(name){
-  if(name==='home'){ loadRanking(); loadGallery(); }
+  if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
@@ -983,6 +995,8 @@ async function loadAdmin(){
     document.getElementById('cfg-template').value = cfg.templateId||'';
     document.getElementById('cfg-key').value = cfg.publicKey||'';
   }
+  // rules
+  document.getElementById('rules-edit').value = await getRules();
   // feedback
   renderAdminFeedback(await getFeedback());
   // gallery
@@ -1285,6 +1299,31 @@ document.getElementById('mobile-mode-toggle').addEventListener('click', ()=>{
   setMobileMode(!document.body.classList.contains('mobile-mode'));
 });
 
+// ---------- rules ----------
+const DEFAULT_RULES = `・注文前に必ず「登録」からニックネームとメールアドレスを登録してください。
+・値段は在庫を確認してから、受け渡し時に決めます。
+・キャンセルしたい場合は、注文時のメモか個別にご連絡ください。
+・過度な連続注文や、いたずら注文はご遠慮ください。
+・受け渡し日時の希望があれば、注文時のメモ欄に書いてください。
+・その他ルールは追加され次第、ここに掲載します。`;
+async function getRules(){
+  let r = await sget('minenko:rules', true);
+  if(r === null){ r = DEFAULT_RULES; await sset('minenko:rules', r, true); }
+  return r;
+}
+async function loadRulesPage(){
+  const text = await getRules();
+  document.getElementById('rules-content').textContent = text;
+}
+document.getElementById('rules-save').addEventListener('click', async ()=>{
+  const text = document.getElementById('rules-edit').value;
+  const msg = document.getElementById('rules-save-msg');
+  const ok = await sset('minenko:rules', text, true);
+  msg.innerHTML = ok
+    ? '<span class="ok">保存しました！</span>'
+    : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
+});
+
 // ---------- gallery ----------
 async function getGallery(){
   let g = await sget('minenko:gallery', true);
@@ -1413,6 +1452,7 @@ loadRegisterList();
 loadAnnouncements();
 loadRanking();
 loadGallery();
+loadRulesPage();
 
 // タブに戻ってきた時に最新データを取り直す
 document.addEventListener('visibilitychange', ()=>{
@@ -1420,7 +1460,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(Date.now() - lastLocalWriteTs < 4000) return; // 保存直後の上書きを防ぐ
   const activeBtn = document.querySelector('nav button.active');
   const current = activeBtn ? activeBtn.dataset.tab : 'home';
-  if(current==='home'){ loadRanking(); loadGallery(); }
+  if(current==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
   if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
