@@ -68,7 +68,7 @@ body{
 /* nav */
 nav{
   max-width:720px; margin:0 auto 20px; display:grid;
-  grid-template-columns:repeat(5,1fr); gap:6px;
+  grid-template-columns:repeat(6,1fr); gap:5px;
 }
 nav button{
   font-family:inherit; font-size:0.68rem; font-weight:700;
@@ -233,7 +233,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 
 /* ---------- mobile mode ---------- */
 body.mobile-mode{ font-size:17px; }
-body.mobile-mode nav{ grid-template-columns:repeat(5,1fr); gap:5px; }
+body.mobile-mode nav{ grid-template-columns:repeat(6,1fr); gap:4px; }
 body.mobile-mode nav button{ font-size:0.6rem; padding:14px 2px; line-height:1.3; }
 body.mobile-mode .panel{ padding:18px 14px; }
 body.mobile-mode .btn{ padding:16px 18px; font-size:1.05rem; width:100%; }
@@ -279,6 +279,7 @@ body.mobile-mode label{ font-size:0.95rem; }
   <button data-tab="announcements">📢 お知らせ</button>
   <button data-tab="register">📝 登録</button>
   <button data-tab="shop">🛒 ショップ</button>
+  <button data-tab="bank">🏦 銀行</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -362,6 +363,44 @@ body.mobile-mode label{ font-size:0.95rem; }
     <div class="note" id="shop-msg"></div>
   </section>
 
+  <!-- BANK -->
+  <section class="panel tab-content" id="tab-bank" style="display:none;">
+    <h2>🏦 スナーク銀行</h2>
+    <div class="note">スナーク帝国の通貨「スナーク」の残高・送金はここから。硬貨は1／10／100スナークの3種類。</div>
+
+    <div id="bank-guest-note" style="display:none;">
+      <div class="note" style="margin-top:14px;">まだ登録されていません。「登録」タブからニックネームを登録してください。</div>
+    </div>
+
+    <div id="bank-body" style="display:none;">
+      <div style="background:var(--wood); border-radius:10px; padding:16px 18px; margin-top:14px; text-align:center;">
+        <div class="note">あなたの残高</div>
+        <div id="bank-balance" style="font-family:'Press Start 2P'; font-size:1.3rem; color:var(--gold); margin-top:6px;">0 スナーク</div>
+      </div>
+
+      <button class="btn secondary" id="bank-notif-enable" style="margin-top:12px;">🔔 入金通知を有効にする</button>
+      <div class="note">このタブを開いたままにしておくと、送金があった時にデスクトップ通知でお知らせします。</div>
+
+      <label style="margin-top:20px;">送金先</label>
+      <select id="bank-recipient"><option value="">-- 選択 --</option></select>
+
+      <label>金額（硬貨をタップ、または直接入力）</label>
+      <div class="tag-row">
+        <span class="tag" style="cursor:pointer;" onclick="addCoin(1)">🪙 +1</span>
+        <span class="tag" style="cursor:pointer;" onclick="addCoin(10)">🪙 +10</span>
+        <span class="tag" style="cursor:pointer;" onclick="addCoin(100)">🪙 +100</span>
+        <span class="tag" style="cursor:pointer;" onclick="clearBankAmount()">クリア</span>
+      </div>
+      <input type="number" id="bank-amount" min="0" value="0" style="margin-top:10px;">
+
+      <button class="btn" id="bank-send" style="margin-top:14px;">この金額を送金する</button>
+      <div class="note" id="bank-msg"></div>
+
+      <h2 style="margin-top:26px;">送金・受取の履歴</h2>
+      <div id="bank-history" style="max-height:320px; overflow-y:auto;"><span class="note">まだ履歴がありません。</span></div>
+    </div>
+  </section>
+
   <!-- ORDER CONFIRM MODAL -->
   <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div class="panel" style="max-width:420px; width:100%; margin:0;">
@@ -441,6 +480,19 @@ body.mobile-mode label{ font-size:0.95rem; }
       <button class="btn ghost" id="rules-save" style="margin-top:8px;">保存する</button>
       <div class="note" id="rules-save-msg"></div>
 
+      <h2 style="margin-top:24px;">🏦 銀行管理</h2>
+      <div class="note">メンバーの残高を発行・調整できます（例：初回登録ボーナス、イベント報酬など）。</div>
+      <div id="admin-balances"><span class="note">読み込み中...</span></div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <select id="grant-nickname" style="max-width:160px;"></select>
+        <input type="number" id="grant-amount" placeholder="金額(±可)" style="max-width:120px;">
+      </div>
+      <button class="btn ghost" id="grant-submit" style="margin-top:8px;">残高を増減する</button>
+      <div class="note" id="grant-msg"></div>
+
+      <h2 style="margin-top:24px;">送金履歴（全体）</h2>
+      <div id="admin-bank-history" style="max-height:320px; overflow-y:auto;"><span class="note">読み込み中...</span></div>
+
       <h2 style="margin-top:24px;">📸 ギャラリー管理</h2>
       <div class="note">サーバーのスクショなどをアップロードすると、ホームに表示されます。自動で圧縮されますが、8枚くらいまでを目安にしてください。</div>
       <input type="file" id="gallery-file" accept="image/*" style="margin-top:8px;">
@@ -489,7 +541,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.15 (2026-07-22)</div>
+<div class="version-badge">v3.16 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -572,11 +624,12 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','admin'];
 function triggerTabLoad(name){
   if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
+  if(name==='bank') loadBank();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
@@ -997,6 +1050,8 @@ async function loadAdmin(){
   }
   // rules
   document.getElementById('rules-edit').value = await getRules();
+  // bank
+  await renderAdminBank();
   // feedback
   renderAdminFeedback(await getFeedback());
   // gallery
@@ -1299,6 +1354,166 @@ document.getElementById('mobile-mode-toggle').addEventListener('click', ()=>{
   setMobileMode(!document.body.classList.contains('mobile-mode'));
 });
 
+// ---------- bank ----------
+let lastTransferCount = null;
+document.getElementById('bank-notif-enable').addEventListener('click', async ()=>{
+  if(!('Notification' in window)){ alert('このブラウザは通知に対応していません。'); return; }
+  const perm = await Notification.requestPermission();
+  if(perm !== 'granted'){ alert('通知が許可されませんでした。ブラウザ設定を確認してください。'); return; }
+  const btn = document.getElementById('bank-notif-enable');
+  btn.textContent = '🔔 入金通知 有効中（このタブを開いたままにしてね）';
+  btn.disabled = true;
+  const transfers = await getTransfers();
+  lastTransferCount = transfers.length;
+  setInterval(pollTransfers, 8000);
+});
+async function pollTransfers(){
+  const mine = await sget('minenko:my_registration', false);
+  const transfers = await getTransfers();
+  if(lastTransferCount === null){ lastTransferCount = transfers.length; return; }
+  if(transfers.length > lastTransferCount){
+    const newOnes = transfers.slice(lastTransferCount);
+    newOnes.forEach(t=>{
+      if(mine && t.to === mine.nickname){
+        new Notification('🏦 入金がありました！', { body: `${t.from} さんから ${t.amount} スナーク届きました。` });
+        beep();
+      }
+    });
+    if(document.getElementById('tab-bank').style.display!=='none') loadBank();
+  }
+  lastTransferCount = transfers.length;
+}
+
+async function getBalances(){
+  let b = await sget('minenko:balances', true);
+  if(!b){ b = {}; await sset('minenko:balances', b, true); }
+  return b;
+}
+async function getTransfers(){
+  let t = await sget('minenko:transfers', true);
+  if(!t){ t = []; await sset('minenko:transfers', t, true); }
+  return t;
+}
+let bankAmount = 0;
+function addCoin(v){
+  bankAmount += v;
+  document.getElementById('bank-amount').value = bankAmount;
+}
+function clearBankAmount(){
+  bankAmount = 0;
+  document.getElementById('bank-amount').value = 0;
+}
+document.getElementById('bank-amount').addEventListener('change', (e)=>{
+  bankAmount = Math.max(0, parseInt(e.target.value,10) || 0);
+  e.target.value = bankAmount;
+});
+async function loadBank(){
+  const mine = await sget('minenko:my_registration', false);
+  const guestNote = document.getElementById('bank-guest-note');
+  const body = document.getElementById('bank-body');
+  if(!mine || !mine.nickname){
+    guestNote.style.display = 'block';
+    body.style.display = 'none';
+    return;
+  }
+  guestNote.style.display = 'none';
+  body.style.display = 'block';
+
+  const balances = await getBalances();
+  const myBalance = balances[mine.nickname] || 0;
+  document.getElementById('bank-balance').textContent = myBalance + ' スナーク';
+
+  const users = await sget('minenko:users', true) || [];
+  const sel = document.getElementById('bank-recipient');
+  sel.innerHTML = '<option value="">-- 選択 --</option>' + users
+    .filter(u=>u.nickname!==mine.nickname)
+    .map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}</option>`).join('');
+
+  clearBankAmount();
+
+  const transfers = await getTransfers();
+  const mineHistory = transfers.filter(t=> t.from===mine.nickname || t.to===mine.nickname).slice().reverse();
+  const historyEl = document.getElementById('bank-history');
+  historyEl.innerHTML = mineHistory.length ? mineHistory.map(t=>{
+    const d = new Date(t.ts);
+    const isSend = t.from === mine.nickname;
+    return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:8px 0;">
+      <span>${isSend ? `→ ${escapeHtml(t.to)}` : `← ${escapeHtml(t.from)}`}<br><span class="note">${d.toLocaleString('ja-JP')}</span></span>
+      <span style="color:${isSend?'#ff8b7d':'#9be36a'}; font-weight:700;">${isSend?'-':'+'}${t.amount}</span>
+    </div>`;
+  }).join('') : '<span class="note">まだ履歴がありません。</span>';
+}
+document.getElementById('bank-send').addEventListener('click', async ()=>{
+  const msg = document.getElementById('bank-msg');
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
+  const to = document.getElementById('bank-recipient').value;
+  const amount = Math.max(0, parseInt(document.getElementById('bank-amount').value,10) || 0);
+  if(!to){ msg.innerHTML = '<span class="err">送金先を選んでください。</span>'; return; }
+  if(amount <= 0){ msg.innerHTML = '<span class="err">金額を入力してください。</span>'; return; }
+
+  const balances = await getBalances();
+  const myBalance = balances[mine.nickname] || 0;
+  if(amount > myBalance){ msg.innerHTML = '<span class="err">残高が足りません。</span>'; return; }
+
+  const sure = confirm(`${to} さんに ${amount} スナーク送金します。よろしいですか？`);
+  if(!sure) return;
+
+  balances[mine.nickname] = myBalance - amount;
+  balances[to] = (balances[to] || 0) + amount;
+  const ok1 = await sset('minenko:balances', balances, true);
+
+  let transfers = await getTransfers();
+  transfers.push({ id: uid(), from: mine.nickname, to, amount, ts: Date.now() });
+  const ok2 = await sset('minenko:transfers', transfers, true);
+
+  if(ok1 && ok2){
+    msg.innerHTML = '<span class="ok">送金しました！</span>';
+  } else {
+    msg.innerHTML = '<span class="err">⚠️ 保存に一部失敗した可能性があります。残高を確認してください。</span>';
+  }
+  loadBank();
+});
+
+async function renderAdminBank(){
+  const users = await sget('minenko:users', true) || [];
+  const balances = await getBalances();
+  const el = document.getElementById('admin-balances');
+  el.innerHTML = users.length ? users.map(u=>`
+    <div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:6px 0;">
+      <span>${escapeHtml(u.nickname)}</span>
+      <span style="color:var(--gold); font-weight:700;">${balances[u.nickname]||0} スナーク</span>
+    </div>`).join('') : '<span class="note">メンバーがいません。</span>';
+
+  const sel = document.getElementById('grant-nickname');
+  sel.innerHTML = users.map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}</option>`).join('');
+
+  const transfers = await getTransfers();
+  const histEl = document.getElementById('admin-bank-history');
+  histEl.innerHTML = transfers.length ? transfers.slice().reverse().map(t=>{
+    const d = new Date(t.ts);
+    return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:6px 0;">
+      <span>${escapeHtml(t.from)} → ${escapeHtml(t.to)}<br><span class="note">${d.toLocaleString('ja-JP')}</span></span>
+      <span style="color:var(--gold); font-weight:700;">${t.amount}</span>
+    </div>`;
+  }).join('') : '<span class="note">まだ履歴がありません。</span>';
+}
+document.getElementById('grant-submit').addEventListener('click', async ()=>{
+  const nickname = document.getElementById('grant-nickname').value;
+  const amount = parseInt(document.getElementById('grant-amount').value, 10);
+  const msg = document.getElementById('grant-msg');
+  if(!nickname){ msg.innerHTML = '<span class="err">メンバーを選んでください。</span>'; return; }
+  if(!amount){ msg.innerHTML = '<span class="err">金額を入力してください（マイナスも可）。</span>'; return; }
+  const balances = await getBalances();
+  balances[nickname] = (balances[nickname]||0) + amount;
+  const ok = await sset('minenko:balances', balances, true);
+  msg.innerHTML = ok
+    ? `<span class="ok">${escapeHtml(nickname)}さんの残高を${amount>0?'+':''}${amount}しました。</span>`
+    : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
+  document.getElementById('grant-amount').value = '';
+  renderAdminBank();
+});
+
 // ---------- rules ----------
 const DEFAULT_RULES = `・注文前に必ず「登録」からニックネームとメールアドレスを登録してください。
 ・値段は在庫を確認してから、受け渡し時に決めます。
@@ -1463,6 +1678,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(current==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
+  if(current==='bank') loadBank();
   if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(current==='admin' && adminLoggedIn) loadAdmin();
 });
