@@ -580,7 +580,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.17 (2026-07-22)</div>
+<div class="version-badge">v3.18 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1440,6 +1440,7 @@ async function loadTube(){
     const viewCount = (p.viewedBy||[]).length;
     const likeCount = (p.likedBy||[]).length;
     const liked = mine && (p.likedBy||[]).includes(mine.nickname);
+    const comments = p.comments || [];
     return `<div class="tube-post" data-id="${p.id}">
       <div class="top"><b>${escapeHtml(p.nickname)}</b><span class="note">${d.toLocaleString('ja-JP')}</span></div>
       ${p.text ? `<div class="text">${escapeHtml(p.text)}</div>` : ''}
@@ -1447,6 +1448,16 @@ async function loadTube(){
       <div class="stats">
         <span>👁 ${viewCount}</span>
         <button class="tube-like-btn ${liked?'liked':''}" onclick="toggleLike('${p.id}')">${liked?'❤️':'🤍'} ${likeCount}</button>
+      </div>
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--wood-light);">
+        ${comments.length ? comments.map(c=>`
+          <div style="font-size:0.8rem; margin-bottom:6px;"><b>${escapeHtml(c.nickname)}</b>：${escapeHtml(c.text)}</div>
+        `).join('') : '<div class="note" style="font-size:0.78rem;">コメントはまだありません。</div>'}
+        ${mine && mine.nickname ? `
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <input type="text" id="comment-input-${p.id}" placeholder="コメントする..." style="flex:1; padding:8px 10px;">
+            <button class="btn ghost" style="margin-top:0; padding:8px 12px;" onclick="submitComment('${p.id}')">送信</button>
+          </div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1474,6 +1485,22 @@ async function toggleLike(id){
     p.likedBy = p.likedBy || [];
     const idx = p.likedBy.indexOf(mine.nickname);
     if(idx >= 0) p.likedBy.splice(idx,1); else p.likedBy.push(mine.nickname);
+    return p;
+  });
+  await sset('minenko:posts', posts, true);
+  loadTube();
+}
+async function submitComment(id){
+  const input = document.getElementById('comment-input-'+id);
+  const text = input ? input.value.trim() : '';
+  if(!text) return;
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に登録してください。'); return; }
+  let posts = await getPosts();
+  posts = posts.map(p=>{
+    if(p.id !== id) return p;
+    p.comments = p.comments || [];
+    p.comments.push({ id: uid(), nickname: mine.nickname, text, ts: Date.now() });
     return p;
   });
   await sset('minenko:posts', posts, true);
