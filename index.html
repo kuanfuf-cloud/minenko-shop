@@ -68,11 +68,11 @@ body{
 /* nav */
 nav{
   max-width:720px; margin:0 auto 20px; display:grid;
-  grid-template-columns:repeat(6,1fr); gap:5px;
+  grid-template-columns:repeat(4,1fr); gap:6px;
 }
 nav button{
-  font-family:inherit; font-size:0.68rem; font-weight:700;
-  padding:11px 3px; cursor:pointer; color:var(--paper);
+  font-family:inherit; font-size:0.72rem; font-weight:700;
+  padding:12px 3px; cursor:pointer; color:var(--paper);
   background:var(--wood);
   border:3px solid; border-color:var(--wood-light) var(--ink) var(--ink) var(--wood-light);
   border-radius:4px;
@@ -180,6 +180,18 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
   font-size:0.7rem; padding:3px 10px; border-radius:10px; border:none; cursor:pointer; font-weight:700;
 }
 .status-未処理{ background:var(--redstone); color:#fff; }
+
+.tube-post{
+  border:2px solid var(--wood-light); border-radius:8px; padding:14px; margin-bottom:12px;
+  background:var(--slot);
+}
+.tube-post .top{ display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:6px; }
+.tube-post .text{ font-size:0.9rem; line-height:1.7; white-space:pre-wrap; margin-bottom:8px; }
+.tube-post img{ max-width:100%; border-radius:6px; cursor:zoom-in; display:block; margin-bottom:8px; }
+.tube-post .stats{ display:flex; gap:14px; font-size:0.78rem; opacity:0.85; align-items:center; }
+.tube-like-btn{ cursor:pointer; border:none; background:none; font-size:0.85rem; color:var(--paper); padding:2px 6px; }
+.tube-like-btn.liked{ color:#ff6b81; }
+
 .status-対応中{ background:var(--gold); color:#3a2c00; }
 .status-完了{ background:var(--grass); color:#16210a; }
 
@@ -233,7 +245,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 
 /* ---------- mobile mode ---------- */
 body.mobile-mode{ font-size:17px; }
-body.mobile-mode nav{ grid-template-columns:repeat(6,1fr); gap:4px; }
+body.mobile-mode nav{ grid-template-columns:repeat(4,1fr); gap:5px; }
 body.mobile-mode nav button{ font-size:0.6rem; padding:14px 2px; line-height:1.3; }
 body.mobile-mode .panel{ padding:18px 14px; }
 body.mobile-mode .btn{ padding:16px 18px; font-size:1.05rem; width:100%; }
@@ -280,6 +292,7 @@ body.mobile-mode label{ font-size:0.95rem; }
   <button data-tab="register">📝 登録</button>
   <button data-tab="shop">🛒 ショップ</button>
   <button data-tab="bank">🏦 銀行</button>
+  <button data-tab="tube">📺 チューブ</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -401,6 +414,28 @@ body.mobile-mode label{ font-size:0.95rem; }
     </div>
   </section>
 
+  <!-- SNARK TUBE -->
+  <section class="panel tab-content" id="tab-tube" style="display:none;">
+    <h2>📺 スナークチューブ</h2>
+    <div class="note">みんなで情報・スクショをシェアできる場所。見た人数と評価が付きます。</div>
+
+    <div id="tube-guest-note" style="display:none;">
+      <div class="note" style="margin-top:14px;">投稿するには「登録」タブから登録してください（閲覧だけなら誰でもできます）。</div>
+    </div>
+
+    <div id="tube-post-form" style="margin-top:16px;">
+      <label>投稿内容</label>
+      <textarea id="tube-text" rows="3" placeholder="今日あったこと、サーバーの情報、なんでもどうぞ"></textarea>
+      <label>画像（任意・自動で圧縮されます）</label>
+      <input type="file" id="tube-image" accept="image/*">
+      <button class="btn" id="tube-post-submit" style="margin-top:10px;">投稿する</button>
+      <div class="note" id="tube-post-msg"></div>
+    </div>
+
+    <h2 style="margin-top:26px;">みんなの投稿</h2>
+    <div id="tube-feed"><span class="note">読み込み中...</span></div>
+  </section>
+
   <!-- ORDER CONFIRM MODAL -->
   <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div class="panel" style="max-width:420px; width:100%; margin:0;">
@@ -480,6 +515,10 @@ body.mobile-mode label{ font-size:0.95rem; }
       <button class="btn ghost" id="rules-save" style="margin-top:8px;">保存する</button>
       <div class="note" id="rules-save-msg"></div>
 
+      <h2 style="margin-top:24px;">📺 スナークチューブ管理</h2>
+      <div class="note">不適切な投稿があれば削除できます。</div>
+      <div id="admin-tube" style="max-height:320px; overflow-y:auto;"><span class="note">読み込み中...</span></div>
+
       <h2 style="margin-top:24px;">🏦 銀行管理</h2>
       <div class="note">メンバーの残高を発行・調整できます（例：初回登録ボーナス、イベント報酬など）。</div>
       <div id="admin-balances"><span class="note">読み込み中...</span></div>
@@ -541,7 +580,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.16 (2026-07-22)</div>
+<div class="version-badge">v3.17 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -624,12 +663,13 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','bank','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','tube','admin'];
 function triggerTabLoad(name){
   if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='bank') loadBank();
+  if(name==='tube') loadTube();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
@@ -1052,6 +1092,8 @@ async function loadAdmin(){
   document.getElementById('rules-edit').value = await getRules();
   // bank
   await renderAdminBank();
+  // tube
+  await renderAdminTube();
   // feedback
   renderAdminFeedback(await getFeedback());
   // gallery
@@ -1354,6 +1396,118 @@ document.getElementById('mobile-mode-toggle').addEventListener('click', ()=>{
   setMobileMode(!document.body.classList.contains('mobile-mode'));
 });
 
+async function renderAdminTube(){
+  const posts = await getPosts();
+  const el = document.getElementById('admin-tube');
+  el.innerHTML = posts.length ? posts.slice().reverse().map(p=>{
+    const d = new Date(p.ts);
+    return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:8px 0; align-items:flex-start;">
+      <span style="max-width:75%;">
+        <b>${escapeHtml(p.nickname)}</b><br>
+        <span class="note">${d.toLocaleString('ja-JP')}</span><br>
+        ${p.text ? escapeHtml(p.text).slice(0,60) : '(画像のみ)'}
+      </span>
+      <a href="javascript:void(0)" onclick="deletePost('${p.id}')" style="color:#ff8b7d;">✕ 削除</a>
+    </div>`;
+  }).join('') : '<span class="note">まだ投稿がありません。</span>';
+}
+async function deletePost(id){
+  if(!confirm('この投稿を削除しますか？')) return;
+  let posts = await getPosts();
+  posts = posts.filter(p=>p.id!==id);
+  await sset('minenko:posts', posts, true);
+  renderAdminTube();
+}
+
+// ---------- snark tube ----------
+async function getPosts(){
+  let p = await sget('minenko:posts', true);
+  if(!p){ p = []; await sset('minenko:posts', p, true); }
+  return p;
+}
+async function loadTube(){
+  const mine = await sget('minenko:my_registration', false);
+  document.getElementById('tube-post-form').style.display = (mine && mine.nickname) ? 'block' : 'none';
+  document.getElementById('tube-guest-note').style.display = (mine && mine.nickname) ? 'none' : 'block';
+
+  const posts = await getPosts();
+  const feed = document.getElementById('tube-feed');
+  if(!posts.length){ feed.innerHTML = '<span class="note">まだ投稿がありません。最初の投稿をしてみよう！</span>'; return; }
+
+  const sorted = posts.slice().reverse();
+  feed.innerHTML = sorted.map(p=>{
+    const d = new Date(p.ts);
+    const viewCount = (p.viewedBy||[]).length;
+    const likeCount = (p.likedBy||[]).length;
+    const liked = mine && (p.likedBy||[]).includes(mine.nickname);
+    return `<div class="tube-post" data-id="${p.id}">
+      <div class="top"><b>${escapeHtml(p.nickname)}</b><span class="note">${d.toLocaleString('ja-JP')}</span></div>
+      ${p.text ? `<div class="text">${escapeHtml(p.text)}</div>` : ''}
+      ${p.image ? `<img src="${p.image}" onclick="showImageLightbox('${p.image}')">` : ''}
+      <div class="stats">
+        <span>👁 ${viewCount}</span>
+        <button class="tube-like-btn ${liked?'liked':''}" onclick="toggleLike('${p.id}')">${liked?'❤️':'🤍'} ${likeCount}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(mine && mine.nickname){
+    markPostsViewed(posts, mine.nickname);
+  }
+}
+async function markPostsViewed(posts, nickname){
+  let changed = false;
+  posts.forEach(p=>{
+    p.viewedBy = p.viewedBy || [];
+    if(!p.viewedBy.includes(nickname)){ p.viewedBy.push(nickname); changed = true; }
+  });
+  if(changed){
+    await sset('minenko:posts', posts, true);
+  }
+}
+async function toggleLike(id){
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に登録してください。'); return; }
+  let posts = await getPosts();
+  posts = posts.map(p=>{
+    if(p.id !== id) return p;
+    p.likedBy = p.likedBy || [];
+    const idx = p.likedBy.indexOf(mine.nickname);
+    if(idx >= 0) p.likedBy.splice(idx,1); else p.likedBy.push(mine.nickname);
+    return p;
+  });
+  await sset('minenko:posts', posts, true);
+  loadTube();
+}
+document.getElementById('tube-post-submit').addEventListener('click', async ()=>{
+  const msg = document.getElementById('tube-post-msg');
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
+  const text = document.getElementById('tube-text').value.trim();
+  const fileInput = document.getElementById('tube-image');
+  const file = fileInput.files && fileInput.files[0];
+  if(!text && !file){ msg.innerHTML = '<span class="err">文章か画像、どちらかは入れてください。</span>'; return; }
+
+  msg.textContent = '投稿中...';
+  try{
+    let image = null;
+    if(file){
+      image = await compressImage(file, 260, 0.35); // 超圧縮：小さいサムネイル程度
+    }
+    let posts = await getPosts();
+    posts.push({ id: uid(), nickname: mine.nickname, text, image, viewedBy:[mine.nickname], likedBy:[], ts: Date.now() });
+    const ok = await sset('minenko:posts', posts, true);
+    document.getElementById('tube-text').value = '';
+    fileInput.value = '';
+    msg.innerHTML = ok
+      ? '<span class="ok">投稿しました！</span>'
+      : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
+    loadTube();
+  }catch(e){
+    msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
+  }
+});
+
 // ---------- bank ----------
 let lastTransferCount = null;
 document.getElementById('bank-notif-enable').addEventListener('click', async ()=>{
@@ -1581,7 +1735,10 @@ async function loadGallery(){
 function openLightbox(id){
   const g = (window.__gallery||[]).find(x=>x.id===id);
   if(!g) return;
-  document.getElementById('lightbox-img').src = g.dataUrl;
+  showImageLightbox(g.dataUrl);
+}
+function showImageLightbox(url){
+  document.getElementById('lightbox-img').src = url;
   document.getElementById('lightbox-modal').style.display = 'flex';
 }
 function closeLightbox(){
@@ -1679,6 +1836,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
   if(current==='bank') loadBank();
+  if(current==='tube') loadTube();
   if(current==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(current==='admin' && adminLoggedIn) loadAdmin();
 });
