@@ -293,6 +293,7 @@ body.mobile-mode label{ font-size:0.95rem; }
   <button data-tab="shop">🛒 ショップ</button>
   <button data-tab="bank">🏦 銀行</button>
   <button data-tab="tube">📺 チューブ</button>
+  <button data-tab="account">👤 アカウント</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -348,17 +349,6 @@ body.mobile-mode label{ font-size:0.95rem; }
       <h2>登録ずみ</h2>
       <p id="reg-done-text" style="font-size:0.9rem;"></p>
       <button class="btn ghost" id="reg-logout">別の名前で登録し直す</button>
-
-      <h2 style="margin-top:26px;">👤 アカウント</h2>
-      <div style="display:flex; align-items:center; gap:14px;">
-        <img id="account-icon-preview" src="" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:3px solid var(--gold); display:none;">
-        <div id="account-icon-placeholder" style="width:70px; height:70px; border-radius:50%; background:var(--wood); display:flex; align-items:center; justify-content:center; font-size:1.6rem; border:3px solid var(--wood-light);">🙂</div>
-        <div style="flex:1;">
-          <input type="file" id="account-icon-file" accept="image/*">
-          <button class="btn ghost" id="account-icon-save" style="margin-top:8px;">アイコンを設定する</button>
-        </div>
-      </div>
-      <div class="note" id="account-icon-msg"></div>
     </div>
 
     <h2 style="margin-top:26px;">登録済みメンバー</h2>
@@ -449,6 +439,32 @@ body.mobile-mode label{ font-size:0.95rem; }
       <span class="tag" id="tube-filter-following" style="cursor:pointer;" onclick="setTubeFilter(true)">フォロー中のみ</span>
     </div>
     <div id="tube-feed"><span class="note">読み込み中...</span></div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section class="panel tab-content" id="tab-account" style="display:none;">
+    <h2>👤 アカウント</h2>
+
+    <div id="account-guest-note" style="display:none;">
+      <div class="note">アカウント設定をするには「登録」タブから登録してください。</div>
+    </div>
+
+    <div id="account-body" style="display:none;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <img id="account-icon-preview" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gold); display:none;">
+        <div id="account-icon-placeholder" style="width:80px; height:80px; border-radius:50%; background:var(--wood); display:flex; align-items:center; justify-content:center; font-size:1.8rem; border:3px solid var(--wood-light);">🙂</div>
+        <div style="flex:1;">
+          <div class="note">アイコン画像</div>
+          <input type="file" id="account-icon-file" accept="image/*" style="margin-top:6px;">
+        </div>
+      </div>
+
+      <label style="margin-top:20px;">紹介文</label>
+      <textarea id="account-bio" rows="4" placeholder="自己紹介、好きなアイテム、よろしくメッセージなど自由にどうぞ"></textarea>
+
+      <button class="btn" id="account-save" style="margin-top:12px;">保存する</button>
+      <div class="note" id="account-msg"></div>
+    </div>
   </section>
 
   <!-- ORDER CONFIRM MODAL -->
@@ -603,7 +619,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.21 (2026-07-22)</div>
+<div class="version-badge">v3.22 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -686,13 +702,14 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','bank','tube','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','admin'];
 function triggerTabLoad(name){
   if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='bank') loadBank();
   if(name==='tube') loadTube();
+  if(name==='account') loadAccount();
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
@@ -784,39 +801,53 @@ async function checkMyRegistration(){
     formWrap.style.display = 'none';
     doneWrap.style.display = 'block';
     document.getElementById('reg-done-text').textContent = `「${mine.nickname}」として登録ずみです。「ショップ」タブからそのまま注文できます。`;
-
-    const users = await sget('minenko:users', true) || [];
-    const me = users.find(u=>u.nickname===mine.nickname);
-    const preview = document.getElementById('account-icon-preview');
-    const placeholder = document.getElementById('account-icon-placeholder');
-    if(me && me.icon){
-      preview.src = me.icon; preview.style.display = 'block'; placeholder.style.display = 'none';
-    } else {
-      preview.style.display = 'none'; placeholder.style.display = 'flex';
-    }
   } else {
     formWrap.style.display = 'block';
     doneWrap.style.display = 'none';
   }
 }
-document.getElementById('account-icon-save').addEventListener('click', async ()=>{
-  const msg = document.getElementById('account-icon-msg');
+async function loadAccount(){
+  const mine = await sget('minenko:my_registration', false);
+  const guestNote = document.getElementById('account-guest-note');
+  const body = document.getElementById('account-body');
+  if(!mine || !mine.nickname){
+    guestNote.style.display = 'block';
+    body.style.display = 'none';
+    return;
+  }
+  guestNote.style.display = 'none';
+  body.style.display = 'block';
+
+  const users = await sget('minenko:users', true) || [];
+  const me = users.find(u=>u.nickname===mine.nickname);
+  const preview = document.getElementById('account-icon-preview');
+  const placeholder = document.getElementById('account-icon-placeholder');
+  if(me && me.icon){
+    preview.src = me.icon; preview.style.display = 'block'; placeholder.style.display = 'none';
+  } else {
+    preview.style.display = 'none'; placeholder.style.display = 'flex';
+  }
+  document.getElementById('account-bio').value = (me && me.bio) || '';
+}
+document.getElementById('account-save').addEventListener('click', async ()=>{
+  const msg = document.getElementById('account-msg');
   const mine = await sget('minenko:my_registration', false);
   if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
   const fileInput = document.getElementById('account-icon-file');
   const file = fileInput.files && fileInput.files[0];
-  if(!file){ msg.innerHTML = '<span class="err">画像を選んでください。</span>'; return; }
-  msg.textContent = '設定中...';
+  const bio = document.getElementById('account-bio').value;
+  msg.textContent = '保存中...';
   try{
-    const icon = await compressImage(file, 160, 0.5);
+    let icon = null;
+    if(file) icon = await compressImage(file, 160, 0.5);
     let users = await sget('minenko:users', true) || [];
-    users = users.map(u => u.nickname===mine.nickname ? {...u, icon} : u);
+    users = users.map(u => u.nickname===mine.nickname ? {...u, bio, ...(icon ? {icon} : {})} : u);
     const ok = await sset('minenko:users', users, true);
     msg.innerHTML = ok
-      ? '<span class="ok">アイコンを設定しました！</span>'
+      ? '<span class="ok">保存しました！</span>'
       : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
     fileInput.value = '';
-    checkMyRegistration();
+    loadAccount();
   }catch(e){
     msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
   }
@@ -1501,6 +1532,7 @@ async function openProfile(nickname){
       <h2 style="margin:0;">${escapeHtml(nickname)}</h2>
     </div>
     ${user.mcid ? `<div class="note">マイクラID: ${escapeHtml(user.mcid)}</div>` : ''}
+    ${user.bio ? `<div style="font-size:0.85rem; line-height:1.7; margin-top:8px; white-space:pre-wrap;">${escapeHtml(user.bio)}</div>` : ''}
     <div class="note">登録日: ${joinedDate}</div>
 
     <div class="tag-row" style="margin-top:14px;">
