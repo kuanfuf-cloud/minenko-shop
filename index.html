@@ -348,6 +348,17 @@ body.mobile-mode label{ font-size:0.95rem; }
       <h2>登録ずみ</h2>
       <p id="reg-done-text" style="font-size:0.9rem;"></p>
       <button class="btn ghost" id="reg-logout">別の名前で登録し直す</button>
+
+      <h2 style="margin-top:26px;">👤 アカウント</h2>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <img id="account-icon-preview" src="" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:3px solid var(--gold); display:none;">
+        <div id="account-icon-placeholder" style="width:70px; height:70px; border-radius:50%; background:var(--wood); display:flex; align-items:center; justify-content:center; font-size:1.6rem; border:3px solid var(--wood-light);">🙂</div>
+        <div style="flex:1;">
+          <input type="file" id="account-icon-file" accept="image/*">
+          <button class="btn ghost" id="account-icon-save" style="margin-top:8px;">アイコンを設定する</button>
+        </div>
+      </div>
+      <div class="note" id="account-icon-msg"></div>
     </div>
 
     <h2 style="margin-top:26px;">登録済みメンバー</h2>
@@ -433,6 +444,10 @@ body.mobile-mode label{ font-size:0.95rem; }
     </div>
 
     <h2 style="margin-top:26px;">みんなの投稿</h2>
+    <div class="tag-row" style="margin-bottom:10px;">
+      <span class="tag" id="tube-filter-all" style="cursor:pointer; outline:2px solid var(--gold);" onclick="setTubeFilter(false)">すべて表示</span>
+      <span class="tag" id="tube-filter-following" style="cursor:pointer;" onclick="setTubeFilter(true)">フォロー中のみ</span>
+    </div>
     <div id="tube-feed"><span class="note">読み込み中...</span></div>
   </section>
 
@@ -451,6 +466,14 @@ body.mobile-mode label{ font-size:0.95rem; }
   <!-- IMAGE LIGHTBOX -->
   <div id="lightbox-modal" onclick="closeLightbox()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center; padding:20px; cursor:zoom-out;">
     <img id="lightbox-img" src="" style="max-width:92vw; max-height:88vh; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,0.6); animation: modalPopIn 0.25s cubic-bezier(.34,1.56,.64,1);">
+  </div>
+
+  <!-- PROFILE MODAL -->
+  <div id="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) closeProfile()">
+    <div class="panel" style="max-width:420px; width:100%; margin:0; max-height:85vh; overflow-y:auto; animation: modalPopIn 0.22s cubic-bezier(.34,1.56,.64,1);">
+      <div id="profile-body"></div>
+      <button class="btn ghost" onclick="closeProfile()" style="margin-top:16px; width:100%;">閉じる</button>
+    </div>
   </div>
 
   <!-- ADMIN / SETTINGS -->
@@ -580,7 +603,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.18 (2026-07-22)</div>
+<div class="version-badge">v3.21 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -761,15 +784,47 @@ async function checkMyRegistration(){
     formWrap.style.display = 'none';
     doneWrap.style.display = 'block';
     document.getElementById('reg-done-text').textContent = `「${mine.nickname}」として登録ずみです。「ショップ」タブからそのまま注文できます。`;
+
+    const users = await sget('minenko:users', true) || [];
+    const me = users.find(u=>u.nickname===mine.nickname);
+    const preview = document.getElementById('account-icon-preview');
+    const placeholder = document.getElementById('account-icon-placeholder');
+    if(me && me.icon){
+      preview.src = me.icon; preview.style.display = 'block'; placeholder.style.display = 'none';
+    } else {
+      preview.style.display = 'none'; placeholder.style.display = 'flex';
+    }
   } else {
     formWrap.style.display = 'block';
     doneWrap.style.display = 'none';
   }
 }
+document.getElementById('account-icon-save').addEventListener('click', async ()=>{
+  const msg = document.getElementById('account-icon-msg');
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
+  const fileInput = document.getElementById('account-icon-file');
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ msg.innerHTML = '<span class="err">画像を選んでください。</span>'; return; }
+  msg.textContent = '設定中...';
+  try{
+    const icon = await compressImage(file, 160, 0.5);
+    let users = await sget('minenko:users', true) || [];
+    users = users.map(u => u.nickname===mine.nickname ? {...u, icon} : u);
+    const ok = await sset('minenko:users', users, true);
+    msg.innerHTML = ok
+      ? '<span class="ok">アイコンを設定しました！</span>'
+      : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
+    fileInput.value = '';
+    checkMyRegistration();
+  }catch(e){
+    msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
+  }
+});
 async function loadRegisterList(){
   const users = await sget('minenko:users', true) || [];
   const el = document.getElementById('reg-list');
-  el.innerHTML = users.length ? users.map(u=>`<span class="tag">${escapeHtml(u.nickname)}</span>`).join('') : '<span class="note">まだ誰も登録していません。</span>';
+  el.innerHTML = users.length ? users.map(u=>`<span class="tag" style="cursor:pointer; display:inline-flex; align-items:center; gap:5px;" onclick="openProfile('${escapeAttr(u.nickname)}')">${u.icon ? `<img src="${u.icon}" style="width:18px; height:18px; border-radius:50%; object-fit:cover;">` : ''}${escapeHtml(u.nickname)}</span>`).join('') : '<span class="note">まだ誰も登録していません。</span>';
 }
 
 // ---------- feedback ----------
@@ -1419,11 +1474,80 @@ async function deletePost(id){
   renderAdminTube();
 }
 
+// ---------- profile ----------
+async function openProfile(nickname){
+  const users = await sget('minenko:users', true) || [];
+  const user = users.find(u=>u.nickname===nickname);
+  if(!user){ return; }
+  const posts = await getPosts();
+  const follows = await getFollows();
+  const balances = await getBalances();
+  const mine = await sget('minenko:my_registration', false);
+
+  const myPosts = posts.filter(p=>p.nickname===nickname);
+  const followerCount = Object.values(follows).filter(list=>(list||[]).includes(nickname)).length;
+  const followingCount = (follows[nickname]||[]).length;
+  const totalViews = myPosts.reduce((s,p)=>s+((p.viewedBy||[]).length),0);
+  const totalLikes = myPosts.reduce((s,p)=>s+((p.likedBy||[]).length),0);
+  const joinedDate = user.ts ? new Date(user.ts).toLocaleDateString('ja-JP') : '不明';
+  const isMe = mine && mine.nickname === nickname;
+  const isFollowing = mine && (follows[mine.nickname]||[]).includes(nickname);
+
+  document.getElementById('profile-body').innerHTML = `
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:10px;">
+      ${user.icon
+        ? `<img src="${user.icon}" style="width:64px; height:64px; border-radius:50%; object-fit:cover; border:3px solid var(--gold);">`
+        : `<div style="width:64px; height:64px; border-radius:50%; background:var(--wood); display:flex; align-items:center; justify-content:center; font-size:1.6rem; border:3px solid var(--wood-light);">🙂</div>`}
+      <h2 style="margin:0;">${escapeHtml(nickname)}</h2>
+    </div>
+    ${user.mcid ? `<div class="note">マイクラID: ${escapeHtml(user.mcid)}</div>` : ''}
+    <div class="note">登録日: ${joinedDate}</div>
+
+    <div class="tag-row" style="margin-top:14px;">
+      <span class="tag">📺 投稿 ${myPosts.length}</span>
+      <span class="tag">👁 閲覧合計 ${totalViews}</span>
+      <span class="tag">❤️ いいね合計 ${totalLikes}</span>
+      <span class="tag">🏦 ${balances[nickname]||0} スナーク</span>
+      <span class="tag">フォロワー ${followerCount}</span>
+      <span class="tag">フォロー中 ${followingCount}</span>
+    </div>
+
+    ${(!isMe && mine) ? `<button class="btn secondary" style="margin-top:14px;" onclick="toggleFollow('${escapeAttr(nickname)}'); openProfile('${escapeAttr(nickname)}');">${isFollowing?'✓ フォロー中（解除する）':'+ フォローする'}</button>` : ''}
+  `;
+  document.getElementById('profile-modal').style.display = 'flex';
+}
+function closeProfile(){
+  document.getElementById('profile-modal').style.display = 'none';
+}
+
 // ---------- snark tube ----------
 async function getPosts(){
   let p = await sget('minenko:posts', true);
   if(!p){ p = []; await sset('minenko:posts', p, true); }
   return p;
+}
+let tubeFilterFollowing = false;
+async function getFollows(){
+  let f = await sget('minenko:follows', true);
+  if(!f){ f = {}; await sset('minenko:follows', f, true); }
+  return f;
+}
+function setTubeFilter(followingOnly){
+  tubeFilterFollowing = followingOnly;
+  document.getElementById('tube-filter-all').style.outline = followingOnly ? 'none' : '2px solid var(--gold)';
+  document.getElementById('tube-filter-following').style.outline = followingOnly ? '2px solid var(--gold)' : 'none';
+  loadTube();
+}
+async function toggleFollow(nickname){
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に登録してください。'); return; }
+  if(mine.nickname === nickname) return;
+  const follows = await getFollows();
+  follows[mine.nickname] = follows[mine.nickname] || [];
+  const idx = follows[mine.nickname].indexOf(nickname);
+  if(idx >= 0) follows[mine.nickname].splice(idx,1); else follows[mine.nickname].push(nickname);
+  await sset('minenko:follows', follows, true);
+  loadTube();
 }
 async function loadTube(){
   const mine = await sget('minenko:my_registration', false);
@@ -1431,18 +1555,42 @@ async function loadTube(){
   document.getElementById('tube-guest-note').style.display = (mine && mine.nickname) ? 'none' : 'block';
 
   const posts = await getPosts();
+  const follows = await getFollows();
+  const myFollowing = (mine && follows[mine.nickname]) || [];
+  const allUsers = await sget('minenko:users', true) || [];
+  const iconMap = {};
+  allUsers.forEach(u=>{ iconMap[u.nickname] = u.icon || null; });
   const feed = document.getElementById('tube-feed');
-  if(!posts.length){ feed.innerHTML = '<span class="note">まだ投稿がありません。最初の投稿をしてみよう！</span>'; return; }
 
-  const sorted = posts.slice().reverse();
+  let target = posts;
+  if(tubeFilterFollowing){
+    target = posts.filter(p => myFollowing.includes(p.nickname));
+  }
+  if(!target.length){
+    feed.innerHTML = tubeFilterFollowing
+      ? '<span class="note">フォロー中の人の投稿はまだありません。</span>'
+      : '<span class="note">まだ投稿がありません。最初の投稿をしてみよう！</span>';
+    if(mine && mine.nickname) markPostsViewed(posts, mine.nickname);
+    return;
+  }
+
+  const sorted = target.slice().reverse();
   feed.innerHTML = sorted.map(p=>{
     const d = new Date(p.ts);
     const viewCount = (p.viewedBy||[]).length;
     const likeCount = (p.likedBy||[]).length;
     const liked = mine && (p.likedBy||[]).includes(mine.nickname);
     const comments = p.comments || [];
+    const isMe = mine && mine.nickname === p.nickname;
+    const isFollowing = myFollowing.includes(p.nickname);
     return `<div class="tube-post" data-id="${p.id}">
-      <div class="top"><b>${escapeHtml(p.nickname)}</b><span class="note">${d.toLocaleString('ja-JP')}</span></div>
+      <div class="top">
+        <span style="display:flex; align-items:center; gap:8px;">
+          ${iconMap[p.nickname] ? `<img src="${iconMap[p.nickname]}" style="width:26px; height:26px; border-radius:50%; object-fit:cover; cursor:pointer;" onclick="openProfile('${escapeAttr(p.nickname)}')">` : `<span style="width:26px; height:26px; border-radius:50%; background:var(--wood-light); display:inline-flex; align-items:center; justify-content:center; font-size:0.85rem; cursor:pointer;" onclick="openProfile('${escapeAttr(p.nickname)}')">🙂</span>`}
+          <b style="cursor:pointer; text-decoration:underline dotted;" onclick="openProfile('${escapeAttr(p.nickname)}')">${escapeHtml(p.nickname)}</b>${(mine && !isMe) ? ` <a href="javascript:void(0)" onclick="toggleFollow('${escapeAttr(p.nickname)}')" style="font-size:0.72rem; color:${isFollowing?'var(--gold)':'var(--diamond)'}; margin-left:6px;">${isFollowing?'✓ フォロー中':'+ フォロー'}</a>` : ''}
+        </span>
+        <span class="note">${d.toLocaleString('ja-JP')}</span>
+      </div>
       ${p.text ? `<div class="text">${escapeHtml(p.text)}</div>` : ''}
       ${p.image ? `<img src="${p.image}" onclick="showImageLightbox('${p.image}')">` : ''}
       <div class="stats">
@@ -1456,6 +1604,7 @@ async function loadTube(){
         ${mine && mine.nickname ? `
           <div style="display:flex; gap:6px; margin-top:8px;">
             <input type="text" id="comment-input-${p.id}" placeholder="コメントする..." style="flex:1; padding:8px 10px;">
+
             <button class="btn ghost" style="margin-top:0; padding:8px 12px;" onclick="submitComment('${p.id}')">送信</button>
           </div>` : ''}
       </div>
