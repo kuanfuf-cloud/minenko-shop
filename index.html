@@ -181,6 +181,20 @@ input:focus, textarea:focus, select:focus{ border-color:var(--diamond); }
 }
 .status-未処理{ background:var(--redstone); color:#fff; }
 
+.chat-msg{
+  display:flex; gap:8px; align-items:flex-start;
+  animation: chatPop 0.2s ease;
+}
+.chat-msg .avatar{ width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.chat-msg .avatar-fallback{
+  width:28px; height:28px; border-radius:50%; background:var(--wood-light);
+  display:flex; align-items:center; justify-content:center; font-size:0.8rem; flex-shrink:0;
+}
+.chat-msg .bubble{ background:var(--slot); border:2px solid var(--wood-light); border-radius:8px; padding:6px 10px; font-size:0.85rem; max-width:80%; }
+.chat-msg .bubble .name{ font-size:0.7rem; color:var(--diamond); margin-bottom:2px; }
+.chat-msg .bubble .time{ font-size:0.62rem; opacity:0.5; margin-top:2px; }
+@keyframes chatPop{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+
 .tube-post{
   border:2px solid var(--wood-light); border-radius:8px; padding:14px; margin-bottom:12px;
   background:var(--slot);
@@ -294,6 +308,7 @@ body.mobile-mode label{ font-size:0.95rem; }
   <button data-tab="bank">🏦 銀行</button>
   <button data-tab="tube">📺 チューブ</button>
   <button data-tab="account">👤 アカウント</button>
+  <button data-tab="chat">💬 チャット</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -467,6 +482,24 @@ body.mobile-mode label{ font-size:0.95rem; }
     </div>
   </section>
 
+  <!-- CHAT -->
+  <section class="panel tab-content" id="tab-chat" style="display:none;">
+    <h2>💬 みんなのチャット</h2>
+    <div class="note">リアルタイム風の掲示板です（数秒おきに自動更新）。登録すれば誰でも書き込めます。</div>
+
+    <div id="chat-messages" style="max-height:420px; overflow-y:auto; margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+      <span class="note">読み込み中...</span>
+    </div>
+
+    <div id="chat-guest-note" style="display:none;">
+      <div class="note" style="margin-top:12px;">書き込むには「登録」タブから登録してください。</div>
+    </div>
+    <div id="chat-input-row" style="display:none; gap:8px; margin-top:12px;">
+      <input type="text" id="chat-text" placeholder="メッセージを入力..." style="flex:1;" maxlength="300">
+      <button class="btn" id="chat-send" style="margin-top:0;">送信</button>
+    </div>
+  </section>
+
   <!-- ORDER CONFIRM MODAL -->
   <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div class="panel" style="max-width:420px; width:100%; margin:0;">
@@ -554,6 +587,11 @@ body.mobile-mode label{ font-size:0.95rem; }
       <button class="btn ghost" id="rules-save" style="margin-top:8px;">保存する</button>
       <div class="note" id="rules-save-msg"></div>
 
+      <h2 style="margin-top:24px;">💬 チャット管理</h2>
+      <div class="note">不適切なやりとりがあった場合、チャット全体を消去できます（個別削除はできません）。</div>
+      <button class="btn ghost" id="chat-clear" style="margin-top:8px;">チャットを全消去する</button>
+      <div class="note" id="chat-clear-msg"></div>
+
       <h2 style="margin-top:24px;">📺 スナークチューブ管理</h2>
       <div class="note">不適切な投稿があれば削除できます。</div>
       <div id="admin-tube" style="max-height:320px; overflow-y:auto;"><span class="note">読み込み中...</span></div>
@@ -619,7 +657,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.22 (2026-07-22)</div>
+<div class="version-badge">v3.23 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -702,7 +740,7 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','chat','admin'];
 function triggerTabLoad(name){
   if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
@@ -710,6 +748,7 @@ function triggerTabLoad(name){
   if(name==='bank') loadBank();
   if(name==='tube') loadTube();
   if(name==='account') loadAccount();
+  if(name==='chat') loadChat(true);
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
@@ -1504,6 +1543,83 @@ async function deletePost(id){
   await sset('minenko:posts', posts, true);
   renderAdminTube();
 }
+document.getElementById('chat-clear').addEventListener('click', async ()=>{
+  const msg = document.getElementById('chat-clear-msg');
+  if(!confirm('チャットの内容を全部消去しますか？この操作は取り消せません。')) return;
+  const ok = await sset('minenko:chat', [], true);
+  msg.innerHTML = ok
+    ? '<span class="ok">チャットを消去しました。</span>'
+    : '<span class="err">⚠️ 消去に失敗しました。もう一度お試しください。</span>';
+});
+
+// ---------- chat ----------
+const CHAT_MAX = 150;
+async function getChatMessages(){
+  let m = await sget('minenko:chat', true);
+  if(!m){ m = []; await sset('minenko:chat', m, true); }
+  return m;
+}
+let chatLastRenderedCount = -1;
+async function loadChat(forceScroll){
+  const mine = await sget('minenko:my_registration', false);
+  document.getElementById('chat-input-row').style.display = (mine && mine.nickname) ? 'flex' : 'none';
+  document.getElementById('chat-guest-note').style.display = (mine && mine.nickname) ? 'none' : 'block';
+
+  const messages = await getChatMessages();
+  if(messages.length === chatLastRenderedCount && !forceScroll) return; // 変化なしなら再描画スキップ
+  chatLastRenderedCount = messages.length;
+
+  const users = await sget('minenko:users', true) || [];
+  const iconMap = {};
+  users.forEach(u=>{ iconMap[u.nickname] = u.icon || null; });
+
+  const el = document.getElementById('chat-messages');
+  const wasNearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
+
+  if(!messages.length){
+    el.innerHTML = '<span class="note">まだメッセージがありません。最初のひとことをどうぞ！</span>';
+    return;
+  }
+  el.innerHTML = messages.map(m=>{
+    const d = new Date(m.ts);
+    const icon = iconMap[m.nickname];
+    return `<div class="chat-msg">
+      ${icon ? `<img class="avatar" src="${icon}">` : `<div class="avatar-fallback">🙂</div>`}
+      <div class="bubble">
+        <div class="name">${escapeHtml(m.nickname)}</div>
+        ${escapeHtml(m.text)}
+        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(forceScroll || wasNearBottom){
+    el.scrollTop = el.scrollHeight;
+  }
+}
+async function sendChatMessage(){
+  const input = document.getElementById('chat-text');
+  const text = input.value.trim();
+  if(!text) return;
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に登録してください。'); return; }
+  let messages = await getChatMessages();
+  messages.push({ id: uid(), nickname: mine.nickname, text, ts: Date.now() });
+  if(messages.length > CHAT_MAX) messages = messages.slice(messages.length - CHAT_MAX);
+  input.value = '';
+  await sset('minenko:chat', messages, true);
+  loadChat(true);
+}
+document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+document.getElementById('chat-text').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') sendChatMessage();
+});
+setInterval(()=>{
+  const activeBtn = document.querySelector('nav button.active');
+  if(activeBtn && activeBtn.dataset.tab === 'chat' && document.visibilityState === 'visible'){
+    loadChat(false);
+  }
+}, 4000);
 
 // ---------- profile ----------
 async function openProfile(nickname){
