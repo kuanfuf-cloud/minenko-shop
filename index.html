@@ -326,6 +326,7 @@ body.mobile-mode label{ font-size:0.95rem; }
   <button data-tab="tube">📺 チューブ</button>
   <button data-tab="account">👤 アカウント</button>
   <button data-tab="chat">💬 チャット</button>
+  <button data-tab="members">🔒 会員専用</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -523,6 +524,38 @@ body.mobile-mode label{ font-size:0.95rem; }
     </div>
   </section>
 
+  <!-- MEMBERS ONLY -->
+  <section class="panel tab-content" id="tab-members" style="display:none;">
+    <div id="members-gate">
+      <h2>🔒 スナーク会員専用ページ</h2>
+      <div class="note">合言葉を知っている会員だけが入れます。</div>
+      <label style="margin-top:10px;">合言葉</label>
+      <input type="password" id="members-pass-input" placeholder="合言葉を入力" autocomplete="new-password">
+      <button class="btn" id="members-login" style="margin-top:10px;">入る</button>
+      <div class="note" id="members-login-msg"></div>
+    </div>
+
+    <div id="members-body" style="display:none;">
+      <h2>🔒 スナーク会員専用ページ</h2>
+      <div class="note">ここは合言葉を知っている会員だけの特別スペースです。</div>
+
+      <h2 style="margin-top:24px;">📢 会員専用お知らせ</h2>
+      <div id="members-announcements"><span class="note">読み込み中...</span></div>
+      <textarea id="members-ann-text" rows="2" placeholder="会員向けのお知らせを書く" style="margin-top:8px;"></textarea>
+      <button class="btn ghost" id="members-ann-add" style="margin-top:8px;">お知らせを追加</button>
+      <div class="note" id="members-ann-msg"></div>
+
+      <h2 style="margin-top:26px;">💬 会員専用チャット</h2>
+      <div id="members-chat-messages" style="max-height:360px; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+        <span class="note">読み込み中...</span>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" id="members-chat-text" placeholder="会員だけに見えるメッセージ..." style="flex:1;" maxlength="300">
+        <button class="btn" id="members-chat-send" style="margin-top:0;">送信</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ORDER CONFIRM MODAL -->
   <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div class="panel" style="max-width:420px; width:100%; margin:0;">
@@ -680,7 +713,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.25 (2026-07-22)</div>
+<div class="version-badge">v3.26 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -763,7 +796,7 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','chat','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','chat','members','admin'];
 function triggerTabLoad(name){
   if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
   if(name==='announcements') loadAnnouncements();
@@ -772,6 +805,7 @@ function triggerTabLoad(name){
   if(name==='tube') loadTube();
   if(name==='account') loadAccount();
   if(name==='chat') loadChat(true);
+  if(name==='members' && membersLoggedIn){ loadMembersAnnouncements(); loadMembersChat(true); }
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
 }
@@ -1745,6 +1779,119 @@ setInterval(()=>{
   const activeBtn = document.querySelector('nav button.active');
   if(activeBtn && activeBtn.dataset.tab === 'chat' && document.visibilityState === 'visible'){
     loadChat(false);
+  }
+}, 1000);
+
+// ---------- members-only page ----------
+const MEMBERS_PASSWORD = 'suna1192';
+let membersLoggedIn = false;
+document.getElementById('members-login').addEventListener('click', ()=>{
+  const input = document.getElementById('members-pass-input');
+  const msg = document.getElementById('members-login-msg');
+  if(input.value === MEMBERS_PASSWORD){
+    membersLoggedIn = true;
+    input.value = '';
+    document.getElementById('members-gate').style.display = 'none';
+    document.getElementById('members-body').style.display = 'block';
+    loadMembersAnnouncements();
+    loadMembersChat(true);
+  } else {
+    msg.innerHTML = '<span class="err">合言葉が違います。</span>';
+  }
+});
+
+async function getMembersAnnouncements(){
+  let a = await sget('minenko:member_announcements', true);
+  if(!a){ a = []; await sset('minenko:member_announcements', a, true); }
+  return a;
+}
+async function loadMembersAnnouncements(){
+  const anns = await getMembersAnnouncements();
+  const el = document.getElementById('members-announcements');
+  el.innerHTML = anns.length
+    ? anns.slice().reverse().map(a=>{
+        const d = new Date(a.ts);
+        return `<div class="note" style="margin-bottom:8px; font-size:0.85rem;">📢 <b>${escapeHtml(a.nickname||'管理者')}</b>：${escapeHtml(a.text)}<br><span style="opacity:0.6;">${d.toLocaleString('ja-JP')}</span></div>`;
+      }).join('')
+    : '<span class="note">まだお知らせはありません。</span>';
+}
+document.getElementById('members-ann-add').addEventListener('click', async ()=>{
+  const text = document.getElementById('members-ann-text').value.trim();
+  const msg = document.getElementById('members-ann-msg');
+  if(!text) return;
+  const mine = await sget('minenko:my_registration', false);
+  let anns = await getMembersAnnouncements();
+  anns.push({ id: uid(), nickname: (mine&&mine.nickname)||'名無し', text, ts: Date.now() });
+  const ok = await sset('minenko:member_announcements', anns, true);
+  document.getElementById('members-ann-text').value = '';
+  loadMembersAnnouncements();
+  msg.innerHTML = ok
+    ? '<span class="ok">追加しました！</span>'
+    : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
+});
+
+const MEMBERS_CHAT_MAX = 150;
+async function getMembersChatMessages(){
+  let m = await sget('minenko:member_chat', true);
+  if(!m){ m = []; await sset('minenko:member_chat', m, true); }
+  return m;
+}
+let membersChatLastCount = -1;
+async function loadMembersChat(forceScroll){
+  const messages = await getMembersChatMessages();
+  if(messages.length === membersChatLastCount && !forceScroll) return;
+  membersChatLastCount = messages.length;
+
+  const users = await sget('minenko:users', true) || [];
+  const iconMap = {};
+  users.forEach(u=>{ iconMap[u.nickname] = u.icon || null; });
+
+  const el = document.getElementById('members-chat-messages');
+  const wasNearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
+
+  if(!messages.length){
+    el.innerHTML = '<span class="note">まだメッセージがありません。</span>';
+    return;
+  }
+  el.innerHTML = messages.map(m=>{
+    const d = new Date(m.ts);
+    const icon = iconMap[m.nickname];
+    return `<div class="chat-msg">
+      ${icon ? `<img class="avatar" src="${icon}">` : `<div class="avatar-fallback">🙂</div>`}
+      <div class="bubble">
+        <div class="name">${escapeHtml(m.nickname)}</div>
+        ${escapeHtml(m.text)}
+        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(forceScroll || wasNearBottom){
+    el.scrollTop = el.scrollHeight;
+  }
+}
+async function sendMembersChatMessage(){
+  const input = document.getElementById('members-chat-text');
+  const text = input.value.trim();
+  if(!text) return;
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に「登録」タブから登録してください。'); return; }
+  let messages = await getMembersChatMessages();
+  messages.push({ id: uid(), nickname: mine.nickname, text, ts: Date.now() });
+  if(messages.length > MEMBERS_CHAT_MAX) messages = messages.slice(messages.length - MEMBERS_CHAT_MAX);
+  input.value = '';
+  await sset('minenko:member_chat', messages, true);
+  loadMembersChat(true);
+}
+document.getElementById('members-chat-send').addEventListener('click', sendMembersChatMessage);
+document.getElementById('members-chat-text').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') sendMembersChatMessage();
+});
+setInterval(()=>{
+  const activeBtn = document.querySelector('nav button.active');
+  if(membersLoggedIn && activeBtn && activeBtn.dataset.tab === 'members' && document.visibilityState === 'visible'){
+    loadMembersChat(false);
+    loadMembersAnnouncements();
   }
 }, 4000);
 
