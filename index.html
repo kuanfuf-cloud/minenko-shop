@@ -40,6 +40,23 @@ body{
 }
 .pixel{ font-family:'Press Start 2P', cursive; letter-spacing:0.5px; }
 
+body.theme-bg-rainbow{
+  background:
+    linear-gradient(120deg, rgba(255,110,199,0.16), rgba(95,208,232,0.14), rgba(255,224,102,0.14), rgba(166,120,224,0.16)),
+    var(--bg-deep);
+  background-size:300% 300%;
+  animation: rainbowShift 12s ease infinite;
+}
+@keyframes rainbowShift{
+  0%{ background-position:0% 50%; }
+  50%{ background-position:100% 50%; }
+  100%{ background-position:0% 50%; }
+}
+body.theme-bg-gradient{
+  background:
+    linear-gradient(160deg, rgba(255,122,156,0.18), rgba(122,184,255,0.16), var(--bg-deep) 70%);
+}
+
 /* header */
 .hero{
   max-width:720px; margin:0 auto 18px; text-align:center;
@@ -479,6 +496,12 @@ body.mobile-mode label{ font-size:0.95rem; }
 
       <button class="btn" id="account-save" style="margin-top:12px;">保存する</button>
       <div class="note" id="account-msg"></div>
+
+      <h2 style="margin-top:28px;">✏️ ニックネームの変更</h2>
+      <div class="note">変更すると、これまでの注文・投稿・残高・フォローなどは全部新しい名前に引き継がれます。</div>
+      <input type="text" id="account-newname" placeholder="新しいニックネーム" style="margin-top:8px;">
+      <button class="btn ghost" id="account-rename" style="margin-top:8px;">変更する</button>
+      <div class="note" id="account-rename-msg"></div>
     </div>
   </section>
 
@@ -657,7 +680,7 @@ body.mobile-mode label{ font-size:0.95rem; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.23 (2026-07-22)</div>
+<div class="version-badge">v3.25 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -889,6 +912,93 @@ document.getElementById('account-save').addEventListener('click', async ()=>{
     loadAccount();
   }catch(e){
     msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
+  }
+});
+document.getElementById('account-rename').addEventListener('click', async ()=>{
+  const msg = document.getElementById('account-rename-msg');
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
+  const newName = document.getElementById('account-newname').value.trim();
+  const oldName = mine.nickname;
+  if(!newName){ msg.innerHTML = '<span class="err">新しいニックネームを入力してください。</span>'; return; }
+  if(newName === oldName){ msg.innerHTML = '<span class="err">今と同じ名前です。</span>'; return; }
+
+  let users = await sget('minenko:users', true) || [];
+  if(users.some(u=>u.nickname===newName)){
+    msg.innerHTML = '<span class="err">その名前は既に使われています。</span>';
+    return;
+  }
+  const sure = confirm(`「${oldName}」から「${newName}」に変更します。よろしいですか？`);
+  if(!sure) return;
+
+  msg.textContent = '変更中...';
+  try{
+    // users
+    users = users.map(u => u.nickname===oldName ? {...u, nickname:newName} : u);
+    await sset('minenko:users', users, true);
+
+    // balances
+    const balances = await getBalances();
+    if(balances[oldName] !== undefined){
+      balances[newName] = balances[oldName];
+      delete balances[oldName];
+      await sset('minenko:balances', balances, true);
+    }
+
+    // transfers
+    let transfers = await getTransfers();
+    transfers = transfers.map(t => ({
+      ...t,
+      from: t.from===oldName ? newName : t.from,
+      to: t.to===oldName ? newName : t.to
+    }));
+    await sset('minenko:transfers', transfers, true);
+
+    // follows（キーと、各自のフォローリストの中身の両方）
+    const follows = await getFollows();
+    const newFollows = {};
+    Object.keys(follows).forEach(key=>{
+      const list = (follows[key]||[]).map(n => n===oldName ? newName : n);
+      const newKey = key===oldName ? newName : key;
+      newFollows[newKey] = list;
+    });
+    await sset('minenko:follows', newFollows, true);
+
+    // orders
+    let orders = await sget('minenko:orders', true) || [];
+    orders = orders.map(o => o.nickname===oldName ? {...o, nickname:newName} : o);
+    await sset('minenko:orders', orders, true);
+
+    // feedback
+    let feedback = await getFeedback();
+    feedback = feedback.map(f => f.nickname===oldName ? {...f, nickname:newName} : f);
+    await sset('minenko:feedback', feedback, true);
+
+    // posts（投稿者名・閲覧者・いいね・コメント）
+    let posts = await getPosts();
+    posts = posts.map(p => ({
+      ...p,
+      nickname: p.nickname===oldName ? newName : p.nickname,
+      viewedBy: (p.viewedBy||[]).map(n => n===oldName ? newName : n),
+      likedBy: (p.likedBy||[]).map(n => n===oldName ? newName : n),
+      comments: (p.comments||[]).map(c => c.nickname===oldName ? {...c, nickname:newName} : c)
+    }));
+    await sset('minenko:posts', posts, true);
+
+    // chat
+    let chatMessages = await sget('minenko:chat', true) || [];
+    chatMessages = chatMessages.map(m => m.nickname===oldName ? {...m, nickname:newName} : m);
+    await sset('minenko:chat', chatMessages, true);
+
+    // my_registration（自分の端末のログイン状態）
+    await sset('minenko:my_registration', { ...mine, nickname:newName }, false);
+
+    msg.innerHTML = '<span class="ok">変更しました！</span>';
+    document.getElementById('account-newname').value = '';
+    checkMyRegistration();
+    loadAccount();
+  }catch(e){
+    msg.innerHTML = '<span class="err">変更中にエラーが起きました。もう一度お試しください。</span>';
   }
 });
 async function loadRegisterList(){
@@ -1472,12 +1582,29 @@ const THEMES = {
   'ネザー': { '--bg-deep':'#1c0e0e', '--bg-panel':'#2c1414', '--wood':'#4a1f1f', '--wood-light':'#6b2c2c', '--grass':'#c0453a', '--grass-dark':'#8f302a', '--diamond':'#ff9d5c', '--gold':'#f2c14e' },
   '桜': { '--bg-deep':'#1c1417', '--bg-panel':'#2b1e23', '--wood':'#4a2f38', '--wood-light':'#6b4652', '--grass':'#e08fa8', '--grass-dark':'#c06a86', '--diamond':'#f5b8cd', '--gold':'#f2d1a5' },
   'エメラルド': { '--bg-deep':'#0f1a12', '--bg-panel':'#17281c', '--wood':'#25402c', '--wood-light':'#396443', '--grass':'#3fbf6b', '--grass-dark':'#2c9450', '--diamond':'#7ee8a8', '--gold':'#e7c15a' },
-  'スナーク帝国': { '--bg-deep':'#120f0c', '--bg-panel':'#1d1712', '--wood':'#2e2119', '--wood-light':'#4a3324', '--grass':'#e0812f', '--grass-dark':'#b5631f', '--diamond':'#2f6fe0', '--gold':'#f2c14e' }
+  'スナーク帝国': { '--bg-deep':'#120f0c', '--bg-panel':'#1d1712', '--wood':'#2e2119', '--wood-light':'#4a3324', '--grass':'#e0812f', '--grass-dark':'#b5631f', '--diamond':'#2f6fe0', '--gold':'#f2c14e' },
+  '砂漠': { '--bg-deep':'#1f180c', '--bg-panel':'#2e2313', '--wood':'#4a3a1c', '--wood-light':'#6e5a2a', '--grass':'#e0b23c', '--grass-dark':'#b58a26', '--diamond':'#5fc2d0', '--gold':'#f2d68a' },
+  '雪原': { '--bg-deep':'#0e1620', '--bg-panel':'#182430', '--wood':'#28394a', '--wood-light':'#3d5468', '--grass':'#bfe3f0', '--grass-dark':'#8fc4d6', '--diamond':'#e8f6fb', '--gold':'#f2c14e' },
+  'ジャングル': { '--bg-deep':'#0c1a10', '--bg-panel':'#12251a', '--wood':'#1f4028', '--wood-light':'#2f5c3a', '--grass':'#4ecb6e', '--grass-dark':'#2f9e4d', '--diamond':'#ffd23f', '--gold':'#e7c15a' },
+  '深海': { '--bg-deep':'#050d16', '--bg-panel':'#0b1a28', '--wood':'#122b3f', '--wood-light':'#1e415c', '--grass':'#1fb6c9', '--grass-dark':'#158a99', '--diamond':'#5fe0e0', '--gold':'#e7c15a' },
+  'サバンナ': { '--bg-deep':'#1a1409', '--bg-panel':'#28200f', '--wood':'#4a3a1a', '--wood-light':'#6e5828', '--grass':'#c98a3f', '--grass-dark':'#a06a2b', '--diamond':'#7fc98a', '--gold':'#f2c14e' },
+  'キノコ島': { '--bg-deep':'#1c0f14', '--bg-panel':'#2c1620', '--wood':'#4a2030', '--wood-light':'#6b2f45', '--grass':'#e0526b', '--grass-dark':'#b03a52', '--diamond':'#f2d6e0', '--gold':'#f2c14e' },
+  'エンド': { '--bg-deep':'#100c18', '--bg-panel':'#1a1424', '--wood':'#2e2140', '--wood-light':'#453260', '--grass':'#a678e0', '--grass-dark':'#7d52b5', '--diamond':'#f2f0a0', '--gold':'#e7c15a' },
+  '虹色': { '--bg-deep':'#120f1a', '--bg-panel':'#1d1828', '--wood':'#332844', '--wood-light':'#4a3a63', '--grass':'#ff6ec7', '--grass-dark':'#c94fa0', '--diamond':'#5fd0e8', '--gold':'#ffe066' },
+  'グラデーション': { '--bg-deep':'#160f1f', '--bg-panel':'#221a33', '--wood':'#3a2a52', '--wood-light':'#54406f', '--grass':'#ff7a9c', '--grass-dark':'#c9557a', '--diamond':'#7ab8ff', '--gold':'#ffd166' }
+};
+const THEME_BG_EFFECT = {
+  '虹色': 'rainbow',
+  'グラデーション': 'gradient'
 };
 function applyTheme(name){
   const t = THEMES[name];
   if(!t) return;
   Object.entries(t).forEach(([k,v])=> document.documentElement.style.setProperty(k, v));
+  document.body.classList.remove('theme-bg-rainbow','theme-bg-gradient');
+  const effect = THEME_BG_EFFECT[name];
+  if(effect === 'rainbow') document.body.classList.add('theme-bg-rainbow');
+  if(effect === 'gradient') document.body.classList.add('theme-bg-gradient');
   try{ localStorage.setItem('minenko_theme', name); }catch(e){}
   renderThemePicker(name);
 }
