@@ -635,6 +635,10 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn ghost" id="chat-clear" style="margin-top:8px;">チャットを全消去する</button>
       <div class="note" id="chat-clear-msg"></div>
 
+      <h2 style="margin-top:24px;">🚩 通報一覧</h2>
+      <div class="note">投稿・チャットへの通報が届くとここに表示されます。</div>
+      <div id="admin-reports" style="max-height:360px; overflow-y:auto; margin-top:8px;"><span class="note">読み込み中...</span></div>
+
       <h2 style="margin-top:24px;">📺 スナークチューブ管理</h2>
       <div class="note">不適切な投稿があれば削除できます。</div>
       <div id="admin-tube" style="max-height:320px; overflow-y:auto;"><span class="note">読み込み中...</span></div>
@@ -711,7 +715,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.36 (2026-07-22)</div>
+<div class="version-badge">v3.37 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1388,6 +1392,8 @@ async function loadAdmin(){
   }
   // rules
   document.getElementById('rules-edit').value = await getRules();
+  // reports
+  await renderAdminReports();
   // bank
   await renderAdminBank();
   // tube
@@ -1721,6 +1727,49 @@ function initMobileMode(){
   try{ localStorage.removeItem('minenko_mobile_mode'); }catch(e){}
 }
 
+async function renderAdminReports(){
+  const reports = await getReports();
+  const el = document.getElementById('admin-reports');
+  if(!reports.length){ el.innerHTML = '<span class="note">通報はありません。</span>'; return; }
+  const typeLabel = { post:'📺 投稿', chat:'💬 チャット', memberchat:'🔒 会員チャット' };
+  el.innerHTML = reports.slice().reverse().map(r=>{
+    const d = new Date(r.ts);
+    return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:8px 0; align-items:flex-start; flex-direction:column; gap:4px;">
+      <div><b>${typeLabel[r.type]||r.type}</b> - 対象: ${escapeHtml(r.targetNickname)}</div>
+      <div class="note">内容: ${escapeHtml(r.snippet||'')}</div>
+      <div class="note">通報者: ${escapeHtml(r.reporterNickname)} / 理由: ${escapeHtml(r.reason)}</div>
+      <div class="note">${d.toLocaleString('ja-JP')}</div>
+      <div style="display:flex; gap:10px; margin-top:4px;">
+        <a href="javascript:void(0)" onclick="deleteReportedContent('${r.id}','${r.type}','${r.targetId}')" style="color:#ff8b7d;">🗑 対象を削除</a>
+        <a href="javascript:void(0)" onclick="dismissReport('${r.id}')" style="color:var(--diamond);">✓ 却下（通報だけ消す）</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function dismissReport(id){
+  let reports = await getReports();
+  reports = reports.filter(r=>r.id!==id);
+  await sset('minenko:reports', reports, true);
+  renderAdminReports();
+}
+async function deleteReportedContent(reportId, type, targetId){
+  if(!confirm('通報された内容を削除しますか？（この操作は元に戻せません）')) return;
+  if(type === 'post'){
+    let posts = await getPosts();
+    posts = posts.filter(p=>p.id!==targetId);
+    await sset('minenko:posts', posts, true);
+  } else if(type === 'chat'){
+    let messages = await sget('minenko:chat', true) || [];
+    messages = messages.filter(m=>m.id!==targetId);
+    await sset('minenko:chat', messages, true);
+  } else if(type === 'memberchat'){
+    let messages = await sget('minenko:member_chat', true) || [];
+    messages = messages.filter(m=>m.id!==targetId);
+    await sset('minenko:member_chat', messages, true);
+  }
+  await dismissReport(reportId);
+  renderAdminTube();
+}
 async function renderAdminTube(){
   const posts = await getPosts();
   const el = document.getElementById('admin-tube');
@@ -1788,7 +1837,7 @@ async function loadChat(forceScroll){
       <div class="bubble">
         <div class="name">${escapeHtml(m.nickname)}</div>
         ${escapeHtml(m.text)}
-        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} <a href="javascript:void(0)" onclick="reportContent('chat','${m.id}','${escapeAttr(m.nickname)}','${escapeAttr((m.text||'').slice(0,40))}')" style="margin-left:6px; opacity:0.6;">🚩</a></div>
       </div>
     </div>`;
   }).join('');
@@ -1900,7 +1949,7 @@ async function loadMembersChat(forceScroll){
       <div class="bubble">
         <div class="name">${escapeHtml(m.nickname)}</div>
         ${escapeHtml(m.text)}
-        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="time">${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} <a href="javascript:void(0)" onclick="reportContent('memberchat','${m.id}','${escapeAttr(m.nickname)}','${escapeAttr((m.text||'').slice(0,40))}')" style="margin-left:6px; opacity:0.6;">🚩</a></div>
       </div>
     </div>`;
   }).join('');
@@ -1933,6 +1982,27 @@ setInterval(()=>{
     loadMembersAnnouncements();
   }
 }, 4000);
+
+// ---------- reports ----------
+async function getReports(){
+  let r = await sget('minenko:reports', true);
+  if(!r){ r = []; await sset('minenko:reports', r, true); }
+  return r;
+}
+async function reportContent(type, targetId, targetNickname, snippet){
+  const mine = await sget('minenko:my_registration', false);
+  const reason = prompt('通報の理由を教えてください（任意）');
+  if(reason === null) return; // キャンセル
+  let reports = await getReports();
+  reports.push({
+    id: uid(), type, targetId, targetNickname,
+    reporterNickname: (mine && mine.nickname) || '匿名',
+    reason: reason || '(理由なし)',
+    snippet, ts: Date.now()
+  });
+  const ok = await sset('minenko:reports', reports, true);
+  alert(ok ? '通報しました。管理者に届きます。' : '通報の送信に失敗しました。もう一度お試しください。');
+}
 
 // ---------- profile ----------
 async function openProfile(nickname){
@@ -2058,6 +2128,7 @@ async function loadTube(){
       <div class="stats">
         <span>👁 ${viewCount}</span>
         <button class="tube-like-btn ${liked?'liked':''}" onclick="toggleLike('${p.id}')">${liked?'❤️':'🤍'} ${likeCount}</button>
+        <button class="tube-like-btn" style="opacity:0.6; margin-left:auto;" onclick="reportContent('post','${p.id}','${escapeAttr(p.nickname)}','${escapeAttr((p.text||'(画像/動画投稿)').slice(0,40))}')">🚩 通報</button>
       </div>
       <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--wood-light);">
         ${comments.length ? comments.map(c=>`
