@@ -645,6 +645,17 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn ghost" id="grant-submit" style="margin-top:8px;">残高を増減する</button>
       <div class="note" id="grant-msg"></div>
 
+      <h2 style="margin-top:24px;">🔁 強制送金（誰から誰へ）</h2>
+      <div class="note">特定のメンバー間で強制的にスナークを移動できます。</div>
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <select id="force-from" style="max-width:150px;"></select>
+        <span style="align-self:center;">→</span>
+        <select id="force-to" style="max-width:150px;"></select>
+        <input type="number" id="force-amount" placeholder="金額" min="1" style="max-width:100px;">
+      </div>
+      <button class="btn ghost" id="force-submit" style="margin-top:8px;">強制送金する</button>
+      <div class="note" id="force-msg"></div>
+
       <h2 style="margin-top:24px;">送金履歴（全体）</h2>
       <div id="admin-bank-history" style="max-height:320px; overflow-y:auto;"><span class="note">読み込み中...</span></div>
 
@@ -696,7 +707,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.32 (2026-07-22)</div>
+<div class="version-badge">v3.33 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -2287,12 +2298,18 @@ async function renderAdminBank(){
   const sel = document.getElementById('grant-nickname');
   sel.innerHTML = users.map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}</option>`).join('');
 
+  const fromSel = document.getElementById('force-from');
+  const toSel = document.getElementById('force-to');
+  const optionsHtml = users.map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}（${balances[u.nickname]||0}）</option>`).join('');
+  fromSel.innerHTML = optionsHtml;
+  toSel.innerHTML = optionsHtml;
+
   const transfers = await getTransfers();
   const histEl = document.getElementById('admin-bank-history');
   histEl.innerHTML = transfers.length ? transfers.slice().reverse().map(t=>{
     const d = new Date(t.ts);
     return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:6px 0;">
-      <span>${escapeHtml(t.from)} → ${escapeHtml(t.to)}<br><span class="note">${d.toLocaleString('ja-JP')}</span></span>
+      <span>${escapeHtml(t.from)} → ${escapeHtml(t.to)}${t.byAdmin ? ' <span style="color:var(--redstone);">(管理者による強制送金)</span>' : ''}<br><span class="note">${d.toLocaleString('ja-JP')}</span></span>
       <span style="color:var(--gold); font-weight:700;">${t.amount}</span>
     </div>`;
   }).join('') : '<span class="note">まだ履歴がありません。</span>';
@@ -2310,6 +2327,36 @@ document.getElementById('grant-submit').addEventListener('click', async ()=>{
     ? `<span class="ok">${escapeHtml(nickname)}さんの残高を${amount>0?'+':''}${amount}しました。</span>`
     : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
   document.getElementById('grant-amount').value = '';
+  renderAdminBank();
+});
+document.getElementById('force-submit').addEventListener('click', async ()=>{
+  const from = document.getElementById('force-from').value;
+  const to = document.getElementById('force-to').value;
+  const amount = parseInt(document.getElementById('force-amount').value, 10);
+  const msg = document.getElementById('force-msg');
+  if(!from || !to){ msg.innerHTML = '<span class="err">送金元と送金先を選んでください。</span>'; return; }
+  if(from === to){ msg.innerHTML = '<span class="err">送金元と送金先が同じです。</span>'; return; }
+  if(!amount || amount <= 0){ msg.innerHTML = '<span class="err">正しい金額を入力してください。</span>'; return; }
+
+  const balances = await getBalances();
+  const fromBalance = balances[from] || 0;
+  if(amount > fromBalance){
+    const sure = confirm(`${from}さんの残高（${fromBalance}）が足りませんが、強制的にマイナスにしてでも送金しますか？`);
+    if(!sure) return;
+  }
+
+  balances[from] = fromBalance - amount;
+  balances[to] = (balances[to] || 0) + amount;
+  const ok1 = await sset('minenko:balances', balances, true);
+
+  let transfers = await getTransfers();
+  transfers.push({ id: uid(), from, to, amount, ts: Date.now(), byAdmin: true });
+  const ok2 = await sset('minenko:transfers', transfers, true);
+
+  msg.innerHTML = (ok1 && ok2)
+    ? `<span class="ok">${escapeHtml(from)}さんから${escapeHtml(to)}さんへ${amount}スナーク強制送金しました。</span>`
+    : '<span class="err">⚠️ 保存に一部失敗した可能性があります。残高を確認してください。</span>';
+  document.getElementById('force-amount').value = '';
   renderAdminBank();
 });
 
