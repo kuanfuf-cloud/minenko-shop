@@ -707,7 +707,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.33 (2026-07-22)</div>
+<div class="version-badge">v3.34 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -944,6 +944,79 @@ document.getElementById('account-save').addEventListener('click', async ()=>{
     msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
   }
 });
+async function renameNicknameEverywhere(oldName, newName){
+  // users
+  let users = await sget('minenko:users', true) || [];
+  users = users.map(u => u.nickname===oldName ? {...u, nickname:newName} : u);
+  await sset('minenko:users', users, true);
+
+  // balances
+  const balances = await getBalances();
+  if(balances[oldName] !== undefined){
+    balances[newName] = balances[oldName];
+    delete balances[oldName];
+    await sset('minenko:balances', balances, true);
+  }
+
+  // transfers
+  let transfers = await getTransfers();
+  transfers = transfers.map(t => ({
+    ...t,
+    from: t.from===oldName ? newName : t.from,
+    to: t.to===oldName ? newName : t.to
+  }));
+  await sset('minenko:transfers', transfers, true);
+
+  // earnings
+  let earnings = await getEarnings();
+  earnings = earnings.map(e => e.nickname===oldName ? {...e, nickname:newName} : e);
+  await sset('minenko:earnings', earnings, true);
+
+  // follows（キーと、各自のフォローリストの中身の両方）
+  const follows = await getFollows();
+  const newFollows = {};
+  Object.keys(follows).forEach(key=>{
+    const list = (follows[key]||[]).map(n => n===oldName ? newName : n);
+    const newKey = key===oldName ? newName : key;
+    newFollows[newKey] = list;
+  });
+  await sset('minenko:follows', newFollows, true);
+
+  // orders
+  let orders = await sget('minenko:orders', true) || [];
+  orders = orders.map(o => o.nickname===oldName ? {...o, nickname:newName} : o);
+  await sset('minenko:orders', orders, true);
+
+  // feedback
+  let feedback = await getFeedback();
+  feedback = feedback.map(f => f.nickname===oldName ? {...f, nickname:newName} : f);
+  await sset('minenko:feedback', feedback, true);
+
+  // posts（投稿者名・閲覧者・いいね・コメント）
+  let posts = await getPosts();
+  posts = posts.map(p => ({
+    ...p,
+    nickname: p.nickname===oldName ? newName : p.nickname,
+    viewedBy: (p.viewedBy||[]).map(n => n===oldName ? newName : n),
+    likedBy: (p.likedBy||[]).map(n => n===oldName ? newName : n),
+    comments: (p.comments||[]).map(c => c.nickname===oldName ? {...c, nickname:newName} : c)
+  }));
+  await sset('minenko:posts', posts, true);
+
+  // chat（公開・会員専用の両方）
+  let chatMessages = await sget('minenko:chat', true) || [];
+  chatMessages = chatMessages.map(m => m.nickname===oldName ? {...m, nickname:newName} : m);
+  await sset('minenko:chat', chatMessages, true);
+
+  let memberChat = await sget('minenko:member_chat', true) || [];
+  memberChat = memberChat.map(m => m.nickname===oldName ? {...m, nickname:newName} : m);
+  await sset('minenko:member_chat', memberChat, true);
+
+  // 会員専用お知らせ
+  let memberAnns = await sget('minenko:member_announcements', true) || [];
+  memberAnns = memberAnns.map(a => a.nickname===oldName ? {...a, nickname:newName} : a);
+  await sset('minenko:member_announcements', memberAnns, true);
+}
 document.getElementById('account-rename').addEventListener('click', async ()=>{
   const msg = document.getElementById('account-rename-msg');
   const mine = await sget('minenko:my_registration', false);
@@ -963,64 +1036,7 @@ document.getElementById('account-rename').addEventListener('click', async ()=>{
 
   msg.textContent = '変更中...';
   try{
-    // users
-    users = users.map(u => u.nickname===oldName ? {...u, nickname:newName} : u);
-    await sset('minenko:users', users, true);
-
-    // balances
-    const balances = await getBalances();
-    if(balances[oldName] !== undefined){
-      balances[newName] = balances[oldName];
-      delete balances[oldName];
-      await sset('minenko:balances', balances, true);
-    }
-
-    // transfers
-    let transfers = await getTransfers();
-    transfers = transfers.map(t => ({
-      ...t,
-      from: t.from===oldName ? newName : t.from,
-      to: t.to===oldName ? newName : t.to
-    }));
-    await sset('minenko:transfers', transfers, true);
-
-    // follows（キーと、各自のフォローリストの中身の両方）
-    const follows = await getFollows();
-    const newFollows = {};
-    Object.keys(follows).forEach(key=>{
-      const list = (follows[key]||[]).map(n => n===oldName ? newName : n);
-      const newKey = key===oldName ? newName : key;
-      newFollows[newKey] = list;
-    });
-    await sset('minenko:follows', newFollows, true);
-
-    // orders
-    let orders = await sget('minenko:orders', true) || [];
-    orders = orders.map(o => o.nickname===oldName ? {...o, nickname:newName} : o);
-    await sset('minenko:orders', orders, true);
-
-    // feedback
-    let feedback = await getFeedback();
-    feedback = feedback.map(f => f.nickname===oldName ? {...f, nickname:newName} : f);
-    await sset('minenko:feedback', feedback, true);
-
-    // posts（投稿者名・閲覧者・いいね・コメント）
-    let posts = await getPosts();
-    posts = posts.map(p => ({
-      ...p,
-      nickname: p.nickname===oldName ? newName : p.nickname,
-      viewedBy: (p.viewedBy||[]).map(n => n===oldName ? newName : n),
-      likedBy: (p.likedBy||[]).map(n => n===oldName ? newName : n),
-      comments: (p.comments||[]).map(c => c.nickname===oldName ? {...c, nickname:newName} : c)
-    }));
-    await sset('minenko:posts', posts, true);
-
-    // chat
-    let chatMessages = await sget('minenko:chat', true) || [];
-    chatMessages = chatMessages.map(m => m.nickname===oldName ? {...m, nickname:newName} : m);
-    await sset('minenko:chat', chatMessages, true);
-
-    // my_registration（自分の端末のログイン状態）
+    await renameNicknameEverywhere(oldName, newName);
     await sset('minenko:my_registration', { ...mine, nickname:newName }, false);
 
     msg.innerHTML = '<span class="ok">変更しました！</span>';
@@ -1392,9 +1408,27 @@ async function renderAdminUsers(){
   el.innerHTML = users.length ? users.map(u=>`
     <div class="tag-row" style="margin-bottom:4px;">
       <span class="tag">${escapeHtml(u.nickname)}（${escapeHtml(u.email||'メール未登録')}）
+        <a href="javascript:void(0)" onclick="adminRenameUser('${escapeAttr(u.nickname)}')" style="color:var(--diamond); margin-left:8px;">✏️ 改名</a>
         <a href="javascript:void(0)" onclick="deleteUser('${u.id}')" style="color:#ff8b7d; margin-left:8px;">✕ 削除</a>
       </span>
     </div>`).join('') : '<div class="note">登録者がいません。</div>';
+}
+async function adminRenameUser(oldName){
+  const newName = prompt(`「${oldName}」の新しいニックネームを入力してください`);
+  if(!newName) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === oldName) return;
+  let users = await sget('minenko:users', true) || [];
+  if(users.some(u=>u.nickname===trimmed)){
+    alert('その名前は既に使われています。');
+    return;
+  }
+  const sure = confirm(`「${oldName}」を「${trimmed}」に強制的に変更します。よろしいですか？\n（本人の端末には反映されないので、本人にも伝えてあげてください）`);
+  if(!sure) return;
+  await renameNicknameEverywhere(oldName, trimmed);
+  alert('変更しました。');
+  renderAdminUsers();
+  renderAdminBank();
 }
 async function deleteUser(id){
   if(!confirm('このメンバーを削除しますか？')) return;
