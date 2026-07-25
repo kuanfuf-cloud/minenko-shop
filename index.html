@@ -577,6 +577,10 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div class="note">好きな配色を選べます。この端末だけの設定です。</div>
     <div class="tag-row" id="theme-picker" style="margin-top:10px;"></div>
 
+    <h3 style="margin-top:16px; font-size:0.85rem; color:var(--diamond);">◆ シンプルなテーマ</h3>
+    <div class="note">派手さを抑えた、目にやさしい落ち着いた配色です。</div>
+    <div class="tag-row" id="theme-picker-simple" style="margin-top:10px;"></div>
+
     <h2 style="margin-top:28px;">🔊 ボタン音</h2>
     <div class="note">ボタンを押すたびにマイクラ風のクリック音が鳴ります。うるさい時はOFFに。</div>
     <button class="btn secondary" id="click-sound-toggle" style="margin-top:8px;">🔊 ボタン音：ON</button>
@@ -707,7 +711,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.34 (2026-07-22)</div>
+<div class="version-badge">v3.36 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1668,8 +1672,14 @@ const THEMES = {
   'キノコ島': { '--bg-deep':'#1c0f14', '--bg-panel':'#2c1620', '--wood':'#4a2030', '--wood-light':'#6b2f45', '--grass':'#e0526b', '--grass-dark':'#b03a52', '--diamond':'#f2d6e0', '--gold':'#f2c14e' },
   'エンド': { '--bg-deep':'#100c18', '--bg-panel':'#1a1424', '--wood':'#2e2140', '--wood-light':'#453260', '--grass':'#a678e0', '--grass-dark':'#7d52b5', '--diamond':'#f2f0a0', '--gold':'#e7c15a' },
   '虹色': { '--bg-deep':'#120f1a', '--bg-panel':'#1d1828', '--wood':'#332844', '--wood-light':'#4a3a63', '--grass':'#ff6ec7', '--grass-dark':'#c94fa0', '--diamond':'#5fd0e8', '--gold':'#ffe066' },
-  'グラデーション': { '--bg-deep':'#160f1f', '--bg-panel':'#221a33', '--wood':'#3a2a52', '--wood-light':'#54406f', '--grass':'#ff7a9c', '--grass-dark':'#c9557a', '--diamond':'#7ab8ff', '--gold':'#ffd166' }
+  'グラデーション': { '--bg-deep':'#160f1f', '--bg-panel':'#221a33', '--wood':'#3a2a52', '--wood-light':'#54406f', '--grass':'#ff7a9c', '--grass-dark':'#c9557a', '--diamond':'#7ab8ff', '--gold':'#ffd166' },
+  'グレー': { '--bg-deep':'#1c1c1c', '--bg-panel':'#262626', '--wood':'#333333', '--wood-light':'#454545', '--grass':'#8a9a8a', '--grass-dark':'#6f7f6f', '--diamond':'#8fa3b3', '--gold':'#bfae8a' },
+  'ベージュ': { '--bg-deep':'#201c16', '--bg-panel':'#2b2620', '--wood':'#3a332a', '--wood-light':'#4f463a', '--grass':'#b3a58a', '--grass-dark':'#8f8370', '--diamond':'#a3ab9a', '--gold':'#c9b98a' },
+  'ネイビー': { '--bg-deep':'#12161c', '--bg-panel':'#1a2028', '--wood':'#252d38', '--wood-light':'#37424f', '--grass':'#7a8fa3', '--grass-dark':'#5f7284', '--diamond':'#8fa8bf', '--gold':'#b3a98a' },
+  'オリーブ': { '--bg-deep':'#181a14', '--bg-panel':'#22251c', '--wood':'#2f3326', '--wood-light':'#424736', '--grass':'#8f9970', '--grass-dark':'#727a58', '--diamond':'#9aa38a', '--gold':'#b8ad7f' },
+  'セピア': { '--bg-deep':'#1e1a15', '--bg-panel':'#28221b', '--wood':'#382f24', '--wood-light':'#4d4232', '--grass':'#a68f6f', '--grass-dark':'#84725a', '--diamond':'#a89a82', '--gold':'#c2a875' }
 };
+const SIMPLE_THEME_NAMES = ['グレー','ベージュ','ネイビー','オリーブ','セピア'];
 const THEME_BG_EFFECT = {
   '虹色': 'rainbow',
   'グラデーション': 'gradient'
@@ -1687,10 +1697,17 @@ function applyTheme(name){
 }
 function renderThemePicker(active){
   const el = document.getElementById('theme-picker');
+  const simpleEl = document.getElementById('theme-picker-simple');
   if(!el) return;
-  el.innerHTML = Object.keys(THEMES).map(name=>`
+  const mainNames = Object.keys(THEMES).filter(name => !SIMPLE_THEME_NAMES.includes(name));
+  el.innerHTML = mainNames.map(name=>`
     <span class="tag" style="cursor:pointer; ${name===active ? 'outline:2px solid var(--gold);' : ''}" onclick="applyTheme('${name}')">${name}${name===active ? ' ✓' : ''}</span>
   `).join('');
+  if(simpleEl){
+    simpleEl.innerHTML = SIMPLE_THEME_NAMES.map(name=>`
+      <span class="tag" style="cursor:pointer; ${name===active ? 'outline:2px solid var(--gold);' : ''}" onclick="applyTheme('${name}')">${name}${name===active ? ' ✓' : ''}</span>
+    `).join('');
+  }
 }
 function initTheme(){
   let saved = '森の夜';
