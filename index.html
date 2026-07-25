@@ -446,6 +446,9 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <textarea id="tube-text" rows="3" placeholder="今日あったこと、サーバーの情報、なんでもどうぞ"></textarea>
       <label>画像（任意・自動で圧縮されます）</label>
       <input type="file" id="tube-image" accept="image/*">
+      <label style="margin-top:10px;">動画（任意・15秒まで、目安15MBまで）</label>
+      <input type="file" id="tube-video" accept="video/*">
+      <div class="note">画像か動画、どちらか片方を選んでください。</div>
       <button class="btn" id="tube-post-submit" style="margin-top:10px;">投稿する</button>
       <div class="note" id="tube-post-msg"></div>
     </div>
@@ -693,7 +696,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.29 (2026-07-22)</div>
+<div class="version-badge">v3.31 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1263,6 +1266,19 @@ function celebrateOrder(){
   }
   document.body.appendChild(overlay);
   setTimeout(()=> overlay.remove(), 3200);
+  playPurchaseVoice();
+}
+function playPurchaseVoice(){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    const utter = new SpeechSynthesisUtterance('スナスナ！');
+    utter.lang = 'ja-JP';
+    utter.rate = 1.05;
+    utter.pitch = 1.35;
+    utter.volume = 1;
+    speechSynthesis.cancel(); // 前の発話が残っていたら止める
+    speechSynthesis.speak(utter);
+  }catch(e){}
 }
 
 // ---------- email via EmailJS REST API (no SDK needed) ----------
@@ -1650,7 +1666,7 @@ async function renderAdminTube(){
       <span style="max-width:75%;">
         <b>${escapeHtml(p.nickname)}</b><br>
         <span class="note">${d.toLocaleString('ja-JP')}</span><br>
-        ${p.text ? escapeHtml(p.text).slice(0,60) : '(画像のみ)'}
+        ${p.text ? escapeHtml(p.text).slice(0,60) : (p.video ? '(動画のみ)' : '(画像のみ)')}
       </span>
       <a href="javascript:void(0)" onclick="deletePost('${p.id}')" style="color:#ff8b7d;">✕ 削除</a>
     </div>`;
@@ -1974,6 +1990,7 @@ async function loadTube(){
       </div>
       ${p.text ? `<div class="text">${escapeHtml(p.text)}</div>` : ''}
       ${p.image ? `<img src="${p.image}" onclick="showImageLightbox('${p.image}')">` : ''}
+      ${p.video ? `<video controls playsinline preload="metadata" style="max-width:100%; border-radius:6px; display:block; margin-bottom:8px;"><source src="${p.video}" type="${p.videoType||'video/mp4'}"></video>` : ''}
       <div class="stats">
         <span>👁 ${viewCount}</span>
         <button class="tube-like-btn ${liked?'liked':''}" onclick="toggleLike('${p.id}')">${liked?'❤️':'🤍'} ${likeCount}</button>
@@ -2043,35 +2060,69 @@ async function submitComment(id){
   await sset('minenko:posts', posts, true);
   loadTube();
 }
+function readVideoFile(file, maxSeconds=15, maxBytes=15*1024*1024){
+  return new Promise((resolve, reject)=>{
+    if(file.size > maxBytes){
+      reject(new Error(`動画サイズが大きすぎます（${(file.size/1024/1024).toFixed(1)}MB）。15MB以内の動画にしてください。`));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const videoEl = document.createElement('video');
+    videoEl.preload = 'metadata';
+    videoEl.onloadedmetadata = ()=>{
+      const duration = videoEl.duration;
+      URL.revokeObjectURL(url);
+      if(!isFinite(duration) || duration > maxSeconds + 0.5){
+        reject(new Error(`動画は${maxSeconds}秒以内にしてください（この動画は約${Math.round(duration)}秒です）。`));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e)=> resolve({ dataUrl: e.target.result, type: file.type || 'video/mp4' });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    };
+    videoEl.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('動画の読み込みに失敗しました。別のファイルでお試しください。')); };
+    videoEl.src = url;
+  });
+}
 document.getElementById('tube-post-submit').addEventListener('click', async ()=>{
   const msg = document.getElementById('tube-post-msg');
   const mine = await sget('minenko:my_registration', false);
   if(!mine || !mine.nickname){ msg.innerHTML = '<span class="err">先に登録してください。</span>'; return; }
   const text = document.getElementById('tube-text').value.trim();
   const fileInput = document.getElementById('tube-image');
+  const videoInput = document.getElementById('tube-video');
   const file = fileInput.files && fileInput.files[0];
-  if(!text && !file){ msg.innerHTML = '<span class="err">文章か画像、どちらかは入れてください。</span>'; return; }
+  const videoFile = videoInput.files && videoInput.files[0];
+  if(!text && !file && !videoFile){ msg.innerHTML = '<span class="err">文章・画像・動画のどれかは入れてください。</span>'; return; }
+  if(file && videoFile){ msg.innerHTML = '<span class="err">画像と動画は同時に選べません。どちらか片方にしてください。</span>'; return; }
 
-  msg.textContent = '投稿中...';
+  msg.textContent = videoFile ? '動画をチェック中...' : '投稿中...';
   try{
     let image = null;
+    let video = null, videoType = null;
     if(file){
       image = await compressImage(file, 480, 0.65); // 圧縮するが、内容が分かる画質に
     }
+    if(videoFile){
+      const v = await readVideoFile(videoFile, 15, 15*1024*1024);
+      video = v.dataUrl; videoType = v.type;
+    }
     let posts = await getPosts();
-    posts.push({ id: uid(), nickname: mine.nickname, text, image, viewedBy:[mine.nickname], likedBy:[], ts: Date.now() });
+    posts.push({ id: uid(), nickname: mine.nickname, text, image, video, videoType, viewedBy:[mine.nickname], likedBy:[], ts: Date.now() });
     const ok = await sset('minenko:posts', posts, true);
     if(ok){
-      await grantEarning(mine.nickname, 1, '投稿', text || '(画像投稿)');
+      await grantEarning(mine.nickname, 1, '投稿', text || (video ? '(動画投稿)' : '(画像投稿)'));
     }
     document.getElementById('tube-text').value = '';
     fileInput.value = '';
+    videoInput.value = '';
     msg.innerHTML = ok
       ? '<span class="ok">投稿しました！（+1スナーク）</span>'
       : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
     loadTube();
   }catch(e){
-    msg.innerHTML = '<span class="err">画像の処理に失敗しました。別の画像でお試しください。</span>';
+    msg.innerHTML = `<span class="err">${escapeHtml(e.message || '処理に失敗しました。別のファイルでお試しください。')}</span>`;
   }
 });
 
