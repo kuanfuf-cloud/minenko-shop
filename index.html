@@ -693,7 +693,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.28 (2026-07-22)</div>
+<div class="version-badge">v3.29 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -2056,7 +2056,7 @@ document.getElementById('tube-post-submit').addEventListener('click', async ()=>
   try{
     let image = null;
     if(file){
-      image = await compressImage(file, 260, 0.35); // 超圧縮：小さいサムネイル程度
+      image = await compressImage(file, 480, 0.65); // 圧縮するが、内容が分かる画質に
     }
     let posts = await getPosts();
     posts.push({ id: uid(), nickname: mine.nickname, text, image, viewedBy:[mine.nickname], likedBy:[], ts: Date.now() });
