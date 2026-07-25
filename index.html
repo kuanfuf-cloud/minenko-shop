@@ -423,6 +423,10 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn" id="bank-send" style="margin-top:14px;">この金額を送金する</button>
       <div class="note" id="bank-msg"></div>
 
+      <h2 style="margin-top:26px;">💰 給料の履歴（投稿・いいね）</h2>
+      <div class="note">スナークチューブの投稿で1スナーク、いいねをもらうと2スナークもらえます。</div>
+      <div id="bank-earnings" style="max-height:320px; overflow-y:auto; margin-top:8px;"><span class="note">まだ履歴がありません。</span></div>
+
       <h2 style="margin-top:26px;">送金・受取の履歴</h2>
       <div id="bank-history" style="max-height:320px; overflow-y:auto;"><span class="note">まだ履歴がありません。</span></div>
     </div>
@@ -689,7 +693,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.27 (2026-07-22)</div>
+<div class="version-badge">v3.28 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -2006,14 +2010,21 @@ async function toggleLike(id){
   const mine = await sget('minenko:my_registration', false);
   if(!mine || !mine.nickname){ alert('先に登録してください。'); return; }
   let posts = await getPosts();
+  let targetPost = null;
+  let nowLiked = false;
   posts = posts.map(p=>{
     if(p.id !== id) return p;
     p.likedBy = p.likedBy || [];
     const idx = p.likedBy.indexOf(mine.nickname);
-    if(idx >= 0) p.likedBy.splice(idx,1); else p.likedBy.push(mine.nickname);
+    if(idx >= 0){ p.likedBy.splice(idx,1); nowLiked = false; }
+    else { p.likedBy.push(mine.nickname); nowLiked = true; }
+    targetPost = p;
     return p;
   });
   await sset('minenko:posts', posts, true);
+  if(targetPost && targetPost.nickname !== mine.nickname){
+    await grantEarning(targetPost.nickname, nowLiked ? 2 : -2, nowLiked ? 'いいね' : 'いいね取消', targetPost.text || '(画像投稿)');
+  }
   loadTube();
 }
 async function submitComment(id){
@@ -2050,10 +2061,13 @@ document.getElementById('tube-post-submit').addEventListener('click', async ()=>
     let posts = await getPosts();
     posts.push({ id: uid(), nickname: mine.nickname, text, image, viewedBy:[mine.nickname], likedBy:[], ts: Date.now() });
     const ok = await sset('minenko:posts', posts, true);
+    if(ok){
+      await grantEarning(mine.nickname, 1, '投稿', text || '(画像投稿)');
+    }
     document.getElementById('tube-text').value = '';
     fileInput.value = '';
     msg.innerHTML = ok
-      ? '<span class="ok">投稿しました！</span>'
+      ? '<span class="ok">投稿しました！（+1スナーク）</span>'
       : '<span class="err">⚠️ 保存に失敗しました。もう一度お試しください。</span>';
     loadTube();
   }catch(e){
@@ -2101,6 +2115,19 @@ async function getTransfers(){
   if(!t){ t = []; await sset('minenko:transfers', t, true); }
   return t;
 }
+async function getEarnings(){
+  let e = await sget('minenko:earnings', true);
+  if(!e){ e = []; await sset('minenko:earnings', e, true); }
+  return e;
+}
+async function grantEarning(nickname, amount, type, postText){
+  const balances = await getBalances();
+  balances[nickname] = (balances[nickname]||0) + amount;
+  await sset('minenko:balances', balances, true);
+  let earnings = await getEarnings();
+  earnings.push({ id: uid(), nickname, type, amount, postText: (postText||'').slice(0,40), ts: Date.now() });
+  await sset('minenko:earnings', earnings, true);
+}
 let bankAmount = 0;
 function addCoin(v){
   bankAmount += v;
@@ -2137,6 +2164,18 @@ async function loadBank(){
     .map(u=>`<option value="${escapeAttr(u.nickname)}">${escapeHtml(u.nickname)}</option>`).join('');
 
   clearBankAmount();
+
+  const earnings = await getEarnings();
+  const myEarnings = earnings.filter(e=>e.nickname===mine.nickname).slice().reverse();
+  const earningsEl = document.getElementById('bank-earnings');
+  earningsEl.innerHTML = myEarnings.length ? myEarnings.map(e=>{
+    const d = new Date(e.ts);
+    const plus = e.amount >= 0;
+    return `<div class="cart-row" style="border-bottom:1px solid var(--wood-light); padding:8px 0;">
+      <span>${e.type}${e.postText ? `：${escapeHtml(e.postText)}` : ''}<br><span class="note">${d.toLocaleString('ja-JP')}</span></span>
+      <span style="color:${plus?'#9be36a':'#ff8b7d'}; font-weight:700;">${plus?'+':''}${e.amount}</span>
+    </div>`;
+  }).join('') : '<span class="note">まだ履歴がありません。</span>';
 
   const transfers = await getTransfers();
   const mineHistory = transfers.filter(t=> t.from===mine.nickname || t.to===mine.nickname).slice().reverse();
