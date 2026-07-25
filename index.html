@@ -696,7 +696,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.31 (2026-07-22)</div>
+<div class="version-badge">v3.32 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -869,6 +869,8 @@ document.getElementById('reg-submit').addEventListener('click', async ()=>{
   checkMyRegistration();
 });
 document.getElementById('reg-logout').addEventListener('click', async ()=>{
+  const sure = confirm('本当に変えますか？（この端末の登録状態だけがリセットされます。過去の注文・投稿・残高などは今の名前に残ったままです）');
+  if(!sure) return;
   await sset('minenko:my_registration', null, false);
   checkMyRegistration();
 });
