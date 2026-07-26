@@ -307,6 +307,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
   <button data-tab="account">👤 アカウント</button>
   <button data-tab="chat">💬 チャット</button>
   <button data-tab="members">🔒 会員専用</button>
+  <button data-tab="minigame">🎮 ミニゲーム</button>
   <button data-tab="admin">⚙️ 設定</button>
 </nav>
 
@@ -328,6 +329,9 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <span class="tag">③ 注文するとお店に通知が届く</span>
     </div>
     <button class="btn" onclick="goTab('register')">まず登録しよう →</button>
+
+    <h2 id="poll-heading" style="margin-top:28px; display:none;">🗳 投票</h2>
+    <div id="poll-body"></div>
 
     <h2 id="ranking-heading" style="margin-top:28px; display:none;">🏆 人気アイテムランキング</h2>
     <div id="ranking-list" style="max-height:340px; overflow-y:auto;"></div>
@@ -543,6 +547,30 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     </div>
   </section>
 
+  <!-- MINIGAME -->
+  <section class="panel tab-content" id="tab-minigame" style="display:none;">
+    <h2>🎮 ミニゲームコーナー</h2>
+    <div class="note">息抜きにどうぞ。まずは「スナークポン」から。</div>
+
+    <h2 style="margin-top:20px;">🏓 スナークポン</h2>
+    <div class="note">下のバーをドラッグ（スマホはタッチ、PCはマウス）して動かし、ボールを相手の陣地に送り込もう。先に5点取ったら勝ち！</div>
+
+    <div class="note" id="pong-opponent-label" style="text-align:center; margin-top:10px;"></div>
+    <div style="text-align:center; margin-top:4px; font-family:'Press Start 2P'; font-size:0.9rem; color:var(--gold);">
+      あなた <span id="pong-score-player">0</span> - <span id="pong-score-bot">0</span> <span id="pong-opponent-short">BOT</span>
+    </div>
+
+    <div style="display:flex; justify-content:center; margin-top:10px;">
+      <canvas id="pong-canvas" width="320" height="420" style="background:var(--slot); border:3px solid var(--wood-light); border-radius:8px; max-width:100%; touch-action:none;"></canvas>
+    </div>
+
+    <div style="text-align:center; margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <button class="btn" id="pong-start">BOTと対戦</button>
+      <button class="btn secondary" id="pong-start-online">🌐 オンライン対戦</button>
+      <button class="btn ghost" id="pong-start-friend">👥 フレンド対戦</button>
+    </div>
+  </section>
+
   <!-- ORDER CONFIRM MODAL -->
   <div id="order-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div class="panel" style="max-width:420px; width:100%; margin:0;">
@@ -635,6 +663,17 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <button class="btn ghost" id="chat-clear" style="margin-top:8px;">チャットを全消去する</button>
       <div class="note" id="chat-clear-msg"></div>
 
+      <h2 style="margin-top:24px;">🗳 投票の作成</h2>
+      <div class="note">新しく作成すると、前の投票結果は消えて新しい投票に切り替わります。みんなの「ホーム」タブに表示されます。</div>
+      <label style="margin-top:8px;">質問</label>
+      <input type="text" id="poll-question" placeholder="例：次のイベント何する？">
+      <label>選択肢（1行に1つ）</label>
+      <textarea id="poll-options" rows="4" placeholder="建築コンテスト&#10;PvP大会&#10;宝探し"></textarea>
+      <button class="btn ghost" id="poll-create" style="margin-top:8px;">この内容で投票を作成する</button>
+      <button class="btn ghost" id="poll-end" style="margin-top:8px;">今の投票を終了する</button>
+      <div class="note" id="poll-admin-msg"></div>
+      <div id="poll-admin-results" style="margin-top:10px;"></div>
+
       <h2 style="margin-top:24px;">🚩 通報一覧</h2>
       <div class="note">投稿・チャットへの通報が届くとここに表示されます。</div>
       <div id="admin-reports" style="max-height:360px; overflow-y:auto; margin-top:8px;"><span class="note">読み込み中...</span></div>
@@ -715,7 +754,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.37 (2026-07-22)</div>
+<div class="version-badge">v3.44 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -798,9 +837,9 @@ async function sset(key, value, shared){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 // ---------- tabs ----------
-const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','chat','members','admin'];
+const TAB_ORDER = ['home','announcements','register','shop','bank','tube','account','chat','members','minigame','admin'];
 function triggerTabLoad(name){
-  if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
+  if(name==='home'){ loadRanking(); loadGallery(); loadRulesPage(); loadPoll(); }
   if(name==='announcements') loadAnnouncements();
   if(name==='shop') loadShop();
   if(name==='bank') loadBank();
@@ -810,6 +849,7 @@ function triggerTabLoad(name){
   if(name==='members' && membersLoggedIn){ loadMembersAnnouncements(); loadMembersChat(true); }
   if(name==='register'){ loadRegisterList(); checkMyRegistration(); }
   if(name==='admin' && adminLoggedIn) loadAdmin();
+  if(name!=='minigame') stopPongGame();
 }
 function goTab(name){
   const activeBtn = document.querySelector('nav button.active');
@@ -1394,6 +1434,8 @@ async function loadAdmin(){
   document.getElementById('rules-edit').value = await getRules();
   // reports
   await renderAdminReports();
+  // poll
+  await renderAdminPoll();
   // bank
   await renderAdminBank();
   // tube
@@ -1982,6 +2024,104 @@ setInterval(()=>{
     loadMembersAnnouncements();
   }
 }, 4000);
+
+// ---------- poll ----------
+async function getPoll(){
+  return await sget('minenko:poll', true); // 未作成ならnull
+}
+async function loadPoll(){
+  const poll = await getPoll();
+  const heading = document.getElementById('poll-heading');
+  const body = document.getElementById('poll-body');
+  if(!poll || !poll.active){
+    heading.style.display = 'none';
+    body.innerHTML = '';
+    return;
+  }
+  heading.style.display = 'block';
+  const mine = await sget('minenko:my_registration', false);
+  const votes = poll.votes || {};
+  const myVote = mine ? votes[mine.nickname] : null;
+  const counts = {};
+  poll.options.forEach(o => counts[o.id] = 0);
+  Object.values(votes).forEach(optId => { if(counts[optId] !== undefined) counts[optId]++; });
+  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
+
+  body.innerHTML = `
+    <div style="background:var(--wood); border-radius:10px; padding:16px 18px;">
+      <div style="font-weight:800; font-size:1rem; margin-bottom:10px;">${escapeHtml(poll.question)}</div>
+      ${poll.options.map(o=>{
+        const c = counts[o.id] || 0;
+        const pct = total ? Math.round(c/total*100) : 0;
+        const isMine = myVote === o.id;
+        return `<div style="margin-bottom:10px; cursor:pointer;" onclick="voteOnPoll('${o.id}')">
+          <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+            <span>${isMine ? '✓ ' : ''}${escapeHtml(o.text)}</span>
+            <span>${c}票（${pct}%）</span>
+          </div>
+          <div style="background:var(--slot); border-radius:6px; overflow:hidden; height:14px;">
+            <div style="background:${isMine ? 'var(--gold)' : 'var(--diamond)'}; height:100%; width:${pct}%;"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      <div class="note">合計 ${total}票${mine ? '（タップで投票・変更できます）' : '（投票には登録が必要です）'}</div>
+    </div>
+  `;
+}
+async function voteOnPoll(optionId){
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に「登録」タブから登録してください。'); return; }
+  const poll = await getPoll();
+  if(!poll || !poll.active) return;
+  poll.votes = poll.votes || {};
+  poll.votes[mine.nickname] = optionId;
+  await sset('minenko:poll', poll, true);
+  loadPoll();
+}
+document.getElementById('poll-create').addEventListener('click', async ()=>{
+  const question = document.getElementById('poll-question').value.trim();
+  const optionsRaw = document.getElementById('poll-options').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const msg = document.getElementById('poll-admin-msg');
+  if(!question || optionsRaw.length < 2){ msg.innerHTML = '<span class="err">質問と、選択肢を2つ以上入力してください。</span>'; return; }
+  const sure = confirm('新しい投票を作成しますか？（前の投票結果は消えます）');
+  if(!sure) return;
+  const poll = {
+    id: uid(),
+    question,
+    options: optionsRaw.map(text => ({ id: uid(), text })),
+    votes: {},
+    active: true,
+    ts: Date.now()
+  };
+  const ok = await sset('minenko:poll', poll, true);
+  msg.innerHTML = ok ? '<span class="ok">投票を作成しました！</span>' : '<span class="err">⚠️ 保存に失敗しました。</span>';
+  document.getElementById('poll-question').value = '';
+  document.getElementById('poll-options').value = '';
+  renderAdminPoll();
+});
+document.getElementById('poll-end').addEventListener('click', async ()=>{
+  const poll = await getPoll();
+  if(!poll){ return; }
+  if(!confirm('今の投票を終了しますか？（ホームから消えます）')) return;
+  poll.active = false;
+  await sset('minenko:poll', poll, true);
+  renderAdminPoll();
+});
+async function renderAdminPoll(){
+  const poll = await getPoll();
+  const el = document.getElementById('poll-admin-results');
+  if(!poll){ el.innerHTML = '<span class="note">まだ投票がありません。</span>'; return; }
+  const votes = poll.votes || {};
+  const counts = {};
+  poll.options.forEach(o => counts[o.id] = 0);
+  Object.values(votes).forEach(optId => { if(counts[optId] !== undefined) counts[optId]++; });
+  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
+  el.innerHTML = `
+    <div class="note"><b>${poll.active ? '実施中' : '終了済み'}：</b>${escapeHtml(poll.question)}</div>
+    ${poll.options.map(o=>`<div class="note">・${escapeHtml(o.text)}：${counts[o.id]||0}票</div>`).join('')}
+    <div class="note">合計 ${total}票</div>
+  `;
+}
 
 // ---------- reports ----------
 async function getReports(){
@@ -2630,6 +2770,458 @@ document.getElementById('ranking-reset').addEventListener('click', async ()=>{
   loadRanking();
 });
 
+// ---------- minigame: スナークポン ----------
+let pongCtx = null, pongAnimId = null, pongRunning = false;
+let pongState = null;
+function initPongState(){
+  const canvas = document.getElementById('pong-canvas');
+  return {
+    w: canvas.width, h: canvas.height,
+    paddleW: 70, paddleH: 10,
+    playerX: canvas.width/2 - 35,
+    botX: canvas.width/2 - 35,
+    ballX: canvas.width/2, ballY: canvas.height/2,
+    ballVX: 0, ballVY: 0,
+    pausedUntil: Date.now() + 1000,
+    pendingDirection: 1, // 最初は必ずプレイヤーの方へサーブ
+    scorePlayer: 0, scoreBot: 0,
+    over: false
+  };
+}
+function drawPong(){
+  const s = pongState;
+  const ctx = pongCtx;
+  ctx.clearRect(0,0,s.w,s.h);
+  // center line
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.setLineDash([6,6]);
+  ctx.beginPath();
+  ctx.moveTo(0, s.h/2); ctx.lineTo(s.w, s.h/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // bot paddle (top)
+  ctx.fillStyle = '#c0453a';
+  ctx.fillRect(s.botX, 14, s.paddleW, s.paddleH);
+  // player paddle (bottom)
+  ctx.fillStyle = '#6f9c3d';
+  ctx.fillRect(s.playerX, s.h - 24, s.paddleW, s.paddleH);
+  // ball
+  ctx.fillStyle = '#e7c15a';
+  ctx.beginPath();
+  ctx.arc(s.ballX, s.ballY, 7, 0, Math.PI*2);
+  ctx.fill();
+  // 得点直後の一時停止中は画面全体を少し暗くする
+  if(s.pausedUntil && Date.now() < s.pausedUntil){
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0,0,s.w,s.h);
+  }
+}
+function stepPong(){
+  const s = pongState;
+  if(s.over) return;
+
+  // 得点直後の一時停止中は、ボールを中央に止めたまま何もしない
+  if(s.pausedUntil){
+    if(Date.now() < s.pausedUntil) return;
+    s.ballVX = 0; // 横方向のブレをなくし、まっすぐ落とす
+    s.ballVY = 2.2 * s.pendingDirection;
+    s.pausedUntil = null;
+  }
+
+  if(s.friendMode === 'host'){
+    // フレンド対戦(ホスト): 相手の位置は同期された値をそのまま使う
+    if(s.paddleBX != null) s.botX = s.paddleBX;
+  } else {
+    // bot AI: ボールが自陣に向かってくる時だけ反応し、そこそこ遅め＆たまに反応が甘い
+    const botCenter = s.botX + s.paddleW/2;
+    const botSpeed = s.botSpeed || 1.5;
+    if(s.ballVY < 0){
+      const deadZone = s.botDeadZone != null ? s.botDeadZone : 16; // 反応の甘さ
+      if(botCenter < s.ballX - deadZone) s.botX += botSpeed;
+      else if(botCenter > s.ballX + deadZone) s.botX -= botSpeed;
+    }
+  }
+  s.botX = Math.max(0, Math.min(s.w - s.paddleW, s.botX));
+
+  s.ballX += s.ballVX;
+  s.ballY += s.ballVY;
+
+  // 左右の壁
+  if(s.ballX - 7 < 0){ s.ballX = 7; s.ballVX *= -1; }
+  if(s.ballX + 7 > s.w){ s.ballX = s.w - 7; s.ballVX *= -1; }
+
+  // botパドルとの当たり判定（上部）
+  if(s.ballY - 7 < 24 && s.ballY - 7 > 14 && s.ballX > s.botX && s.ballX < s.botX + s.paddleW && s.ballVY < 0){
+    s.ballVY *= -1;
+    const hitPos = (s.ballX - (s.botX + s.paddleW/2)) / (s.paddleW/2);
+    s.ballVX = hitPos * 2.2;
+  }
+  // playerパドルとの当たり判定（下部）
+  if(s.ballY + 7 > s.h - 24 && s.ballY + 7 < s.h - 14 && s.ballX > s.playerX && s.ballX < s.playerX + s.paddleW && s.ballVY > 0){
+    s.ballVY *= -1;
+    const hitPos = (s.ballX - (s.playerX + s.paddleW/2)) / (s.paddleW/2);
+    s.ballVX = hitPos * 2.2;
+  }
+
+  // 得点判定
+  if(s.ballY < 0){
+    s.scorePlayer++;
+    document.getElementById('pong-score-player').textContent = s.scorePlayer;
+    resetPongBall(-1);
+  } else if(s.ballY > s.h){
+    s.scoreBot++;
+    document.getElementById('pong-score-bot').textContent = s.scoreBot;
+    resetPongBall(1);
+  }
+
+  if(s.scorePlayer >= 5 || s.scoreBot >= 5){
+    s.over = true;
+    const playerWon = s.scorePlayer >= 5;
+
+    if(s.friendMode === 'host'){
+      finishFriendMatchAsHost(playerWon);
+      return;
+    }
+
+    pongRunning = false;
+    const opponentDisplay = s.opponentName || 'BOT';
+    const msg = playerWon ? '🎉 あなたの勝ち！（+2スナーク）' : `😢 ${opponentDisplay}の勝ち...`;
+    setTimeout(()=>{
+      pongCtx.fillStyle = 'rgba(0,0,0,0.6)';
+      pongCtx.fillRect(0,0,s.w,s.h);
+      pongCtx.fillStyle = '#e7c15a';
+      pongCtx.font = 'bold 18px sans-serif';
+      pongCtx.textAlign = 'center';
+      pongCtx.fillText(msg, s.w/2, s.h/2);
+    }, 30);
+    document.getElementById('pong-start').textContent = 'BOTと対戦';
+    if(playerWon) grantPongWinReward();
+    return;
+  }
+}
+async function grantPongWinReward(){
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname) return;
+  await grantEarning(mine.nickname, 2, 'ミニゲーム勝利', 'スナークポンで勝利');
+}
+function resetPongBall(direction){
+  const s = pongState;
+  s.ballX = s.w/2; s.ballY = s.h/2;
+  s.ballVX = 0; s.ballVY = 0;
+  s.pausedUntil = Date.now() + 1000;
+  s.pendingDirection = direction;
+  // 得点のたびにパドルも中央に戻す
+  s.playerX = s.w/2 - s.paddleW/2;
+  if(s.friendMode !== 'host') s.botX = s.w/2 - s.paddleW/2;
+}
+function pongLoop(){
+  if(!pongRunning) return;
+  stepPong();
+  drawPong();
+  pongAnimId = requestAnimationFrame(pongLoop);
+}
+function stopPongGame(){
+  pongRunning = false;
+  if(pongAnimId) cancelAnimationFrame(pongAnimId);
+  cancelFriendMatch();
+}
+const PONG_NAME_POOL = ['ゆうと','さくら','けんた','みお','たろう','はなこ','りく','あおい','しょう','ららら','じゅん','なな','ひまり','そら','かい','ゆい','れん','みなと','あかり','だいき'];
+function resetPongButtons(){
+  document.getElementById('pong-start').disabled = false;
+  document.getElementById('pong-start-online').disabled = false;
+  document.getElementById('pong-start-friend').disabled = false;
+  document.getElementById('pong-start').textContent = 'BOTと対戦';
+  document.getElementById('pong-start-online').textContent = '🌐 オンライン対戦';
+  document.getElementById('pong-start-friend').textContent = '👥 フレンド対戦';
+}
+function startPongGame(isOnline){
+  cancelFriendMatch();
+  const canvas = document.getElementById('pong-canvas');
+  if(!pongCtx) pongCtx = canvas.getContext('2d');
+  pongState = initPongState();
+
+  const opponentLabel = document.getElementById('pong-opponent-label');
+  const opponentShort = document.getElementById('pong-opponent-short');
+  if(isOnline){
+    const name = PONG_NAME_POOL[Math.floor(Math.random()*PONG_NAME_POOL.length)] + Math.floor(Math.random()*90+10);
+    // 強さをランダム化（BOT速度1.0〜2.4、反応の甘さ8〜28）
+    pongState.botSpeed = 1.0 + Math.random()*1.4;
+    pongState.botDeadZone = 8 + Math.random()*20;
+    pongState.opponentName = name;
+    opponentLabel.textContent = `🌐 「${name}」さんとマッチングしました`;
+    opponentShort.textContent = name;
+  } else {
+    pongState.botSpeed = 1.5;
+    pongState.botDeadZone = 16;
+    opponentLabel.textContent = '';
+    opponentShort.textContent = 'BOT';
+  }
+
+  pongRunning = true;
+  document.getElementById('pong-score-player').textContent = 0;
+  document.getElementById('pong-score-bot').textContent = 0;
+  resetPongButtons();
+  if(pongAnimId) cancelAnimationFrame(pongAnimId);
+  pongLoop();
+}
+document.getElementById('pong-start').addEventListener('click', ()=> startPongGame(false));
+document.getElementById('pong-start-online').addEventListener('click', async ()=>{
+  cancelFriendMatch();
+  const label = document.getElementById('pong-opponent-label');
+  document.getElementById('pong-start').disabled = true;
+  document.getElementById('pong-start-online').disabled = true;
+  document.getElementById('pong-start-friend').disabled = true;
+  label.textContent = '🌐 マッチング中...';
+  const delay = 1000 + Math.random()*4000; // 1〜5秒のリアルさ演出
+  await new Promise(res => setTimeout(res, delay));
+  resetPongButtons();
+  startPongGame(true);
+});
+
+// ---------- フレンド対戦（実際の相手とオンライン風にマッチング） ----------
+let friendMode = null;      // null | 'host' | 'guest'
+let friendSearching = false;
+let friendMyName = null;
+let friendOpponentName = null;
+let friendQueueTimer = null;
+let friendHostTickTimer = null;
+let friendHostSyncTimer = null;
+let friendGuestTickTimer = null;
+let friendGuestSyncTimer = null;
+let friendHostTickCount = 0;
+
+async function getPongQueue(){
+  let q = await sget('minenko:pong_queue', true);
+  if(!q){ q = []; await sset('minenko:pong_queue', q, true); }
+  return q;
+}
+async function getActiveMatch(){
+  return await sget('minenko:pong_match', true);
+}
+async function getGuestPaddle(){
+  return await sget('minenko:pong_guest_paddle', true);
+}
+
+document.getElementById('pong-start-friend').addEventListener('click', async ()=>{
+  if(friendMode || friendSearching){
+    cancelFriendMatch();
+    resetPongButtons();
+    document.getElementById('pong-opponent-label').textContent = '';
+    return;
+  }
+  const mine = await sget('minenko:my_registration', false);
+  if(!mine || !mine.nickname){ alert('先に「登録」タブから登録してください。'); return; }
+  startFriendSearch(mine.nickname);
+});
+
+async function startFriendSearch(myName){
+  stopPongGame();
+  friendSearching = true;
+  friendMyName = myName;
+  document.getElementById('pong-start').disabled = true;
+  document.getElementById('pong-start-online').disabled = true;
+  document.getElementById('pong-start-friend').textContent = 'キャンセル（マッチング中...）';
+  document.getElementById('pong-opponent-label').textContent = '👥 フレンドを探しています…（誰かが「フレンド対戦」を押すとマッチします）';
+  document.getElementById('pong-score-player').textContent = 0;
+  document.getElementById('pong-score-bot').textContent = 0;
+  document.getElementById('pong-opponent-short').textContent = '???';
+
+  let queue = await getPongQueue();
+  queue = queue.filter(q => q.nickname !== myName);
+  queue.push({ nickname: myName, ts: Date.now() });
+  await sset('minenko:pong_queue', queue, true);
+
+  friendQueueTimer = setInterval(()=> pollFriendQueue(myName), 1500);
+}
+async function pollFriendQueue(myName){
+  if(!friendSearching) return;
+  let queue = await getPongQueue();
+  const now = Date.now();
+  queue = queue.filter(q => now - q.ts < 120000); // 2分以上待ってる人は掃除
+
+  const mineEntry = queue.find(q => q.nickname === myName);
+  if(!mineEntry){
+    queue.push({ nickname: myName, ts: now });
+    await sset('minenko:pong_queue', queue, true);
+    return;
+  }
+  const others = queue.filter(q => q.nickname !== myName);
+  if(!others.length){
+    await sset('minenko:pong_queue', queue, true);
+    return;
+  }
+  others.sort((a,b)=> a.ts - b.ts);
+  const opponent = others[0];
+  const amHost = mineEntry.ts <= opponent.ts;
+
+  queue = queue.filter(q => q.nickname !== myName && q.nickname !== opponent.nickname);
+  await sset('minenko:pong_queue', queue, true);
+
+  clearInterval(friendQueueTimer); friendQueueTimer = null;
+  friendSearching = false;
+  friendOpponentName = opponent.nickname;
+
+  if(amHost) becomeHost(myName, opponent.nickname);
+  else becomeGuest(myName, opponent.nickname);
+}
+function cancelFriendMatch(){
+  if(friendSearching){
+    friendSearching = false;
+    if(friendQueueTimer){ clearInterval(friendQueueTimer); friendQueueTimer = null; }
+    (async ()=>{
+      if(!friendMyName) return;
+      let queue = await getPongQueue();
+      queue = queue.filter(q => q.nickname !== friendMyName);
+      await sset('minenko:pong_queue', queue, true);
+    })();
+  }
+  if(friendMode){
+    friendMode = null;
+    if(friendHostTickTimer){ clearTimeout(friendHostTickTimer); friendHostTickTimer = null; }
+    if(friendHostSyncTimer){ clearInterval(friendHostSyncTimer); friendHostSyncTimer = null; }
+    if(friendGuestTickTimer){ clearInterval(friendGuestTickTimer); friendGuestTickTimer = null; }
+    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
+  }
+}
+
+async function becomeHost(myName, opponentName){
+  const canvas = document.getElementById('pong-canvas');
+  if(!pongCtx) pongCtx = canvas.getContext('2d');
+  friendMode = 'host';
+  pongState = initPongState();
+  pongState.friendMode = 'host';
+  pongState.opponentName = opponentName;
+  pongState.paddleBX = pongState.w/2 - 35;
+
+  document.getElementById('pong-opponent-label').textContent = `👥 「${opponentName}」さんとマッチしました！`;
+  document.getElementById('pong-opponent-short').textContent = opponentName;
+  document.getElementById('pong-start-friend').textContent = 'フレンド対戦中...';
+
+  await sset('minenko:pong_match', {
+    hostName: myName, guestName: opponentName,
+    ballX: pongState.ballX, ballY: pongState.ballY,
+    scoreHost: 0, scoreGuest: 0,
+    paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
+    pausedUntil: pongState.pausedUntil, pendingDirection: 1,
+    status: 'playing', winner: null, updatedAt: Date.now()
+  }, true);
+  await sset('minenko:pong_guest_paddle', pongState.paddleBX, true);
+
+  pongRunning = true;
+  friendHostTickCount = 0;
+  friendHostLoop();
+  friendHostSyncTimer = setInterval(hostSyncTick, 180);
+}
+function friendHostLoop(){
+  if(friendMode !== 'host') return;
+  stepPong();
+  drawPong();
+  friendHostTickTimer = setTimeout(friendHostLoop, 40);
+}
+async function hostSyncTick(){
+  if(friendMode !== 'host' || !pongState) return;
+  const gp = await getGuestPaddle();
+  if(typeof gp === 'number') pongState.paddleBX = gp;
+  await sset('minenko:pong_match', {
+    hostName: friendMyName, guestName: friendOpponentName,
+    ballX: pongState.ballX, ballY: pongState.ballY,
+    scoreHost: pongState.scorePlayer, scoreGuest: pongState.scoreBot,
+    paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
+    pausedUntil: pongState.pausedUntil, pendingDirection: pongState.pendingDirection,
+    status: 'playing', winner: null, updatedAt: Date.now()
+  }, true);
+}
+async function finishFriendMatchAsHost(hostWon){
+  if(friendHostSyncTimer){ clearInterval(friendHostSyncTimer); friendHostSyncTimer = null; }
+  if(friendHostTickTimer){ clearTimeout(friendHostTickTimer); friendHostTickTimer = null; }
+  const s = pongState;
+  const winnerName = hostWon ? friendMyName : friendOpponentName;
+  await sset('minenko:pong_match', {
+    hostName: friendMyName, guestName: friendOpponentName,
+    ballX: s.ballX, ballY: s.ballY,
+    scoreHost: s.scorePlayer, scoreGuest: s.scoreBot,
+    paddleAX: s.playerX, paddleBX: s.paddleBX,
+    pausedUntil: null, pendingDirection: 1,
+    status: 'finished', winner: winnerName, updatedAt: Date.now()
+  }, true);
+  showFriendMatchResult(hostWon, friendOpponentName);
+  friendMode = null;
+  pongRunning = false;
+}
+async function becomeGuest(myName, opponentName){
+  const canvas = document.getElementById('pong-canvas');
+  if(!pongCtx) pongCtx = canvas.getContext('2d');
+  friendMode = 'guest';
+  pongState = initPongState();
+  pongState.friendMode = 'guest';
+  pongState.opponentName = opponentName;
+
+  document.getElementById('pong-opponent-label').textContent = `👥 「${opponentName}」さんとマッチしました！`;
+  document.getElementById('pong-opponent-short').textContent = opponentName;
+  document.getElementById('pong-start-friend').textContent = 'フレンド対戦中...';
+
+  pongRunning = true;
+  friendGuestLoop();
+  friendGuestSyncTimer = setInterval(guestSyncTick, 160);
+}
+function friendGuestLoop(){
+  if(friendMode !== 'guest') return;
+  drawPong(); // ゲスト側は物理演算はせず、受信データ+自分のパドル位置を描画するだけ
+  friendGuestTickTimer = setTimeout(friendGuestLoop, 40);
+}
+async function guestSyncTick(){
+  if(friendMode !== 'guest' || !pongState) return;
+  await sset('minenko:pong_guest_paddle', pongState.playerX, true);
+  const match = await getActiveMatch();
+  if(!match) return;
+  if(match.status === 'finished'){
+    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
+    const guestWon = match.winner === friendMyName;
+    showFriendMatchResult(guestWon, friendOpponentName);
+    friendMode = null;
+    pongRunning = false;
+    return;
+  }
+  pongState.ballX = match.ballX; pongState.ballY = match.ballY;
+  pongState.botX = match.paddleAX;
+  pongState.scorePlayer = match.scoreGuest;
+  pongState.scoreBot = match.scoreHost;
+  pongState.pausedUntil = match.pausedUntil;
+  document.getElementById('pong-score-player').textContent = pongState.scorePlayer;
+  document.getElementById('pong-score-bot').textContent = pongState.scoreBot;
+}
+function showFriendMatchResult(won, opponentName){
+  const s = pongState;
+  setTimeout(()=>{
+    pongCtx.fillStyle = 'rgba(0,0,0,0.6)';
+    pongCtx.fillRect(0,0,s.w,s.h);
+    pongCtx.fillStyle = '#e7c15a';
+    pongCtx.font = 'bold 18px sans-serif';
+    pongCtx.textAlign = 'center';
+    pongCtx.fillText(won ? '🎉 あなたの勝ち！（+2スナーク）' : `😢 ${opponentName}の勝ち...`, s.w/2, s.h/2);
+  }, 30);
+  resetPongButtons();
+  if(won) grantPongWinReward();
+}
+
+function pongHandlePointer(clientX){
+  const canvas = document.getElementById('pong-canvas');
+  if(!pongState) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const x = (clientX - rect.left) * scaleX;
+  pongState.playerX = Math.max(0, Math.min(pongState.w - pongState.paddleW, x - pongState.paddleW/2));
+}
+(function(){
+  const canvas = document.getElementById('pong-canvas');
+  canvas.addEventListener('mousemove', (e)=> pongHandlePointer(e.clientX));
+  canvas.addEventListener('touchmove', (e)=>{
+    if(e.touches && e.touches[0]) pongHandlePointer(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive:false });
+
+})();
+
 // init
 initTheme();
 initMobileMode();
@@ -2639,6 +3231,7 @@ loadAnnouncements();
 loadRanking();
 loadGallery();
 loadRulesPage();
+loadPoll();
 
 // タブに戻ってきた時に最新データを取り直す
 document.addEventListener('visibilitychange', ()=>{
@@ -2646,7 +3239,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(Date.now() - lastLocalWriteTs < 4000) return; // 保存直後の上書きを防ぐ
   const activeBtn = document.querySelector('nav button.active');
   const current = activeBtn ? activeBtn.dataset.tab : 'home';
-  if(current==='home'){ loadRanking(); loadGallery(); loadRulesPage(); }
+  if(current==='home'){ loadRanking(); loadGallery(); loadRulesPage(); loadPoll(); }
   if(current==='announcements') loadAnnouncements();
   if(current==='shop') loadShop();
   if(current==='bank') loadBank();
