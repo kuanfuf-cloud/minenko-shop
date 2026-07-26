@@ -754,7 +754,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.44 (2026-07-22)</div>
+<div class="version-badge">v3.45 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -3100,6 +3100,7 @@ async function becomeHost(myName, opponentName){
   await sset('minenko:pong_match', {
     hostName: myName, guestName: opponentName,
     ballX: pongState.ballX, ballY: pongState.ballY,
+    ballVX: 0, ballVY: 0,
     scoreHost: 0, scoreGuest: 0,
     paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
     pausedUntil: pongState.pausedUntil, pendingDirection: 1,
@@ -3110,7 +3111,7 @@ async function becomeHost(myName, opponentName){
   pongRunning = true;
   friendHostTickCount = 0;
   friendHostLoop();
-  friendHostSyncTimer = setInterval(hostSyncTick, 180);
+  friendHostSyncTimer = setInterval(hostSyncTick, 90);
 }
 function friendHostLoop(){
   if(friendMode !== 'host') return;
@@ -3125,6 +3126,7 @@ async function hostSyncTick(){
   await sset('minenko:pong_match', {
     hostName: friendMyName, guestName: friendOpponentName,
     ballX: pongState.ballX, ballY: pongState.ballY,
+    ballVX: pongState.ballVX, ballVY: pongState.ballVY,
     scoreHost: pongState.scorePlayer, scoreGuest: pongState.scoreBot,
     paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
     pausedUntil: pongState.pausedUntil, pendingDirection: pongState.pendingDirection,
@@ -3139,6 +3141,7 @@ async function finishFriendMatchAsHost(hostWon){
   await sset('minenko:pong_match', {
     hostName: friendMyName, guestName: friendOpponentName,
     ballX: s.ballX, ballY: s.ballY,
+    ballVX: 0, ballVY: 0,
     scoreHost: s.scorePlayer, scoreGuest: s.scoreBot,
     paddleAX: s.playerX, paddleBX: s.paddleBX,
     pausedUntil: null, pendingDirection: 1,
@@ -3155,6 +3158,7 @@ async function becomeGuest(myName, opponentName){
   pongState = initPongState();
   pongState.friendMode = 'guest';
   pongState.opponentName = opponentName;
+  pongState.ballVX = 0; pongState.ballVY = 0;
 
   document.getElementById('pong-opponent-label').textContent = `👥 「${opponentName}」さんとマッチしました！`;
   document.getElementById('pong-opponent-short').textContent = opponentName;
@@ -3162,11 +3166,17 @@ async function becomeGuest(myName, opponentName){
 
   pongRunning = true;
   friendGuestLoop();
-  friendGuestSyncTimer = setInterval(guestSyncTick, 160);
+  friendGuestSyncTimer = setInterval(guestSyncTick, 90);
 }
 function friendGuestLoop(){
   if(friendMode !== 'guest') return;
-  drawPong(); // ゲスト側は物理演算はせず、受信データ+自分のパドル位置を描画するだけ
+  const s = pongState;
+  // 次の同期が届くまで、最後に受け取った速度でなめらかに予測して動かす
+  if(s.pausedUntil == null || Date.now() >= s.pausedUntil){
+    s.ballX += s.ballVX || 0;
+    s.ballY += s.ballVY || 0;
+  }
+  drawPong();
   friendGuestTickTimer = setTimeout(friendGuestLoop, 40);
 }
 async function guestSyncTick(){
@@ -3182,13 +3192,18 @@ async function guestSyncTick(){
     pongRunning = false;
     return;
   }
-  pongState.ballX = match.ballX; pongState.ballY = match.ballY;
-  pongState.botX = match.paddleAX;
-  pongState.scorePlayer = match.scoreGuest;
-  pongState.scoreBot = match.scoreHost;
-  pongState.pausedUntil = match.pausedUntil;
-  document.getElementById('pong-score-player').textContent = pongState.scorePlayer;
-  document.getElementById('pong-score-bot').textContent = pongState.scoreBot;
+  const s = pongState;
+  // ホスト視点とゲスト視点は上下が逆（お互い自分が下）なので、Y座標と縦速度を反転させる
+  s.ballX = match.ballX;
+  s.ballY = s.h - match.ballY;
+  s.ballVX = match.ballVX || 0;
+  s.ballVY = -(match.ballVY || 0);
+  s.botX = match.paddleAX;
+  s.scorePlayer = match.scoreGuest;
+  s.scoreBot = match.scoreHost;
+  s.pausedUntil = match.pausedUntil;
+  document.getElementById('pong-score-player').textContent = s.scorePlayer;
+  document.getElementById('pong-score-bot').textContent = s.scoreBot;
 }
 function showFriendMatchResult(won, opponentName){
   const s = pongState;
