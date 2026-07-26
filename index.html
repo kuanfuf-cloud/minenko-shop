@@ -754,7 +754,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.45 (2026-07-22)</div>
+<div class="version-badge">v3.49 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -2816,15 +2816,25 @@ function drawPong(){
     ctx.fillRect(0,0,s.w,s.h);
   }
 }
+let pongLastFrameTime = null;
+function pongDeltaFactor(){
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if(pongLastFrameTime == null){ pongLastFrameTime = now; return 1; }
+  let dt = now - pongLastFrameTime;
+  pongLastFrameTime = now;
+  dt = Math.max(1, Math.min(dt, 120)); // タブが重い/非アクティブだった時の急激なジャンプを防ぐ
+  return dt / (1000/60); // 60fps基準の倍率
+}
 function stepPong(){
   const s = pongState;
   if(s.over) return;
+  const factor = pongDeltaFactor(); // 端末の描画間隔が長くても実時間ベースで一定速度になるように
 
   // 得点直後の一時停止中は、ボールを中央に止めたまま何もしない
   if(s.pausedUntil){
     if(Date.now() < s.pausedUntil) return;
     s.ballVX = 0; // 横方向のブレをなくし、まっすぐ落とす
-    s.ballVY = 2.2 * s.pendingDirection;
+    s.ballVY = 5.4 * s.pendingDirection;
     s.pausedUntil = null;
   }
 
@@ -2834,7 +2844,7 @@ function stepPong(){
   } else {
     // bot AI: ボールが自陣に向かってくる時だけ反応し、そこそこ遅め＆たまに反応が甘い
     const botCenter = s.botX + s.paddleW/2;
-    const botSpeed = s.botSpeed || 1.5;
+    const botSpeed = (s.botSpeed || 1.5) * factor;
     if(s.ballVY < 0){
       const deadZone = s.botDeadZone != null ? s.botDeadZone : 16; // 反応の甘さ
       if(botCenter < s.ballX - deadZone) s.botX += botSpeed;
@@ -2843,8 +2853,8 @@ function stepPong(){
   }
   s.botX = Math.max(0, Math.min(s.w - s.paddleW, s.botX));
 
-  s.ballX += s.ballVX;
-  s.ballY += s.ballVY;
+  s.ballX += s.ballVX * factor;
+  s.ballY += s.ballVY * factor;
 
   // 左右の壁
   if(s.ballX - 7 < 0){ s.ballX = 7; s.ballVX *= -1; }
@@ -2854,13 +2864,13 @@ function stepPong(){
   if(s.ballY - 7 < 24 && s.ballY - 7 > 14 && s.ballX > s.botX && s.ballX < s.botX + s.paddleW && s.ballVY < 0){
     s.ballVY *= -1;
     const hitPos = (s.ballX - (s.botX + s.paddleW/2)) / (s.paddleW/2);
-    s.ballVX = hitPos * 2.2;
+    s.ballVX = hitPos * 5.4;
   }
   // playerパドルとの当たり判定（下部）
   if(s.ballY + 7 > s.h - 24 && s.ballY + 7 < s.h - 14 && s.ballX > s.playerX && s.ballX < s.playerX + s.paddleW && s.ballVY > 0){
     s.ballVY *= -1;
     const hitPos = (s.ballX - (s.playerX + s.paddleW/2)) / (s.paddleW/2);
-    s.ballVX = hitPos * 2.2;
+    s.ballVX = hitPos * 5.4;
   }
 
   // 得点判定
@@ -2936,6 +2946,7 @@ function resetPongButtons(){
 }
 function startPongGame(isOnline){
   cancelFriendMatch();
+  pongLastFrameTime = null;
   const canvas = document.getElementById('pong-canvas');
   if(!pongCtx) pongCtx = canvas.getContext('2d');
   pongState = initPongState();
@@ -2945,13 +2956,13 @@ function startPongGame(isOnline){
   if(isOnline){
     const name = PONG_NAME_POOL[Math.floor(Math.random()*PONG_NAME_POOL.length)] + Math.floor(Math.random()*90+10);
     // 強さをランダム化（BOT速度1.0〜2.4、反応の甘さ8〜28）
-    pongState.botSpeed = 1.0 + Math.random()*1.4;
+    pongState.botSpeed = 2.4 + Math.random()*2.8;
     pongState.botDeadZone = 8 + Math.random()*20;
     pongState.opponentName = name;
     opponentLabel.textContent = `🌐 「${name}」さんとマッチングしました`;
     opponentShort.textContent = name;
   } else {
-    pongState.botSpeed = 1.5;
+    pongState.botSpeed = 3.4;
     pongState.botDeadZone = 16;
     opponentLabel.textContent = '';
     opponentShort.textContent = 'BOT';
@@ -3085,6 +3096,7 @@ function cancelFriendMatch(){
 }
 
 async function becomeHost(myName, opponentName){
+  pongLastFrameTime = null;
   const canvas = document.getElementById('pong-canvas');
   if(!pongCtx) pongCtx = canvas.getContext('2d');
   friendMode = 'host';
@@ -3138,8 +3150,9 @@ async function finishFriendMatchAsHost(hostWon){
   if(friendHostTickTimer){ clearTimeout(friendHostTickTimer); friendHostTickTimer = null; }
   const s = pongState;
   const winnerName = hostWon ? friendMyName : friendOpponentName;
+  const finishedHostName = friendMyName, finishedGuestName = friendOpponentName;
   await sset('minenko:pong_match', {
-    hostName: friendMyName, guestName: friendOpponentName,
+    hostName: finishedHostName, guestName: finishedGuestName,
     ballX: s.ballX, ballY: s.ballY,
     ballVX: 0, ballVY: 0,
     scoreHost: s.scorePlayer, scoreGuest: s.scoreBot,
@@ -3150,8 +3163,17 @@ async function finishFriendMatchAsHost(hostWon){
   showFriendMatchResult(hostWon, friendOpponentName);
   friendMode = null;
   pongRunning = false;
+  // ゲストが「終了」を受け取る時間を空けてから、次のマッチのために共有データを片付ける
+  setTimeout(async ()=>{
+    const current = await getActiveMatch();
+    if(current && current.hostName === finishedHostName && current.guestName === finishedGuestName){
+      await sset('minenko:pong_match', null, true);
+      await sset('minenko:pong_guest_paddle', null, true);
+    }
+  }, 4000);
 }
 async function becomeGuest(myName, opponentName){
+  pongLastFrameTime = null;
   const canvas = document.getElementById('pong-canvas');
   if(!pongCtx) pongCtx = canvas.getContext('2d');
   friendMode = 'guest';
@@ -3171,10 +3193,11 @@ async function becomeGuest(myName, opponentName){
 function friendGuestLoop(){
   if(friendMode !== 'guest') return;
   const s = pongState;
+  const factor = pongDeltaFactor();
   // 次の同期が届くまで、最後に受け取った速度でなめらかに予測して動かす
   if(s.pausedUntil == null || Date.now() >= s.pausedUntil){
-    s.ballX += s.ballVX || 0;
-    s.ballY += s.ballVY || 0;
+    s.ballX += (s.ballVX || 0) * factor;
+    s.ballY += (s.ballVY || 0) * factor;
   }
   drawPong();
   friendGuestTickTimer = setTimeout(friendGuestLoop, 40);
@@ -3184,12 +3207,24 @@ async function guestSyncTick(){
   await sset('minenko:pong_guest_paddle', pongState.playerX, true);
   const match = await getActiveMatch();
   if(!match) return;
+  // 自分たちの対戦データかどうかを確認（他のペアの新しい試合と混ざらないように）
+  if(match.hostName !== friendOpponentName || match.guestName !== friendMyName) return;
+
   if(match.status === 'finished'){
     if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
     const guestWon = match.winner === friendMyName;
     showFriendMatchResult(guestWon, friendOpponentName);
     friendMode = null;
     pongRunning = false;
+    return;
+  }
+  // しばらく更新が無ければ相手が切断したとみなす
+  if(match.updatedAt && Date.now() - match.updatedAt > 10000){
+    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
+    document.getElementById('pong-opponent-label').textContent = `⚠️ 「${friendOpponentName}」さんとの通信が切れたようです。`;
+    friendMode = null;
+    pongRunning = false;
+    resetPongButtons();
     return;
   }
   const s = pongState;
