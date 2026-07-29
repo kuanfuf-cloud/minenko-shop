@@ -366,6 +366,11 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
       <h2>登録ずみ</h2>
       <p id="reg-done-text" style="font-size:0.9rem;"></p>
       <button class="btn ghost" id="reg-logout">別の名前で登録し直す</button>
+
+      <h2 style="margin-top:26px;">🔀 アカウント切り替え</h2>
+      <div class="note">この端末に、最大3つまでアカウントを保存していつでも切り替えられます。</div>
+      <div id="account-slots" style="margin-top:10px;"></div>
+      <button class="btn ghost" id="account-add-new" style="margin-top:8px;">＋ 新しいアカウントを追加</button>
     </div>
 
     <h2 style="margin-top:26px;">登録済みメンバー</h2>
@@ -474,6 +479,22 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     </div>
 
     <div id="account-body" style="display:none;">
+      <h2 style="margin-top:0;">🔀 アカウント切り替え（最大3つ）</h2>
+      <div class="note">この端末に登録した最大3つのアカウントを、いつでも切り替えられます。</div>
+      <div id="account-switch-list" style="margin-top:10px;"></div>
+      <div id="account-add-form" style="display:none; margin-top:14px; padding:14px; background:var(--wood); border-radius:8px;">
+        <label style="margin-top:0;">ニックネーム</label>
+        <input type="text" id="account-add-nickname" placeholder="例：じろう" autocomplete="off">
+        <label>メールアドレス</label>
+        <input type="text" id="account-add-email" placeholder="例：jiro@example.com" autocomplete="off">
+        <label>マイクラのID / 名前（あれば）</label>
+        <input type="text" id="account-add-mcid" placeholder="例：Jiro_MC" autocomplete="off">
+        <button class="btn ghost" id="account-add-submit" style="margin-top:10px;">このアカウントを作成する</button>
+        <div class="note" id="account-add-msg"></div>
+      </div>
+      <button class="btn ghost" id="account-add-toggle" style="margin-top:10px;">＋ 新しいアカウントを追加する</button>
+
+      <h2 style="margin-top:28px;">🎨 プロフィール編集（今のアカウント）</h2>
       <div style="display:flex; align-items:center; gap:14px;">
         <img id="account-icon-preview" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gold); display:none;">
         <div id="account-icon-placeholder" style="width:80px; height:80px; border-radius:50%; background:var(--wood); display:flex; align-items:center; justify-content:center; font-size:1.8rem; border:3px solid var(--wood-light);">🙂</div>
@@ -567,7 +588,6 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
     <div style="text-align:center; margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <button class="btn" id="pong-start">BOTと対戦</button>
       <button class="btn secondary" id="pong-start-online">🌐 オンライン対戦</button>
-      <button class="btn ghost" id="pong-start-friend">👥 フレンド対戦</button>
     </div>
   </section>
 
@@ -754,7 +774,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.49 (2026-07-22)</div>
+<div class="version-badge">v3.50 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -911,13 +931,20 @@ document.getElementById('reg-submit').addEventListener('click', async ()=>{
   const msg = document.getElementById('reg-msg');
   if(!nickname){ msg.innerHTML = '<span class="err">ニックネームを入力してください。</span>'; return; }
   if(!email || !EMAIL_RE.test(email)){ msg.innerHTML = '<span class="err">正しいメールアドレスを入力してください。</span>'; return; }
+  const existingAccounts = await getMyAccounts();
+  if(!existingAccounts.some(a=>a.nickname===nickname) && existingAccounts.length >= 3){
+    msg.innerHTML = '<span class="err">この端末には既に3つアカウントが保存されています。「アカウント切り替え」から不要なものを削除してから追加してください。</span>';
+    return;
+  }
   let users = await sget('minenko:users', true) || [];
   if(users.some(u=>u.nickname===nickname)){
     msg.innerHTML = '<span class="err">そのニックネームは既に使われています。別の名前にしてください。</span>'; return;
   }
   users.push({id:uid(), nickname, email, mcid, ts:Date.now()});
   const ok = await sset('minenko:users', users, true);
-  await sset('minenko:my_registration', {nickname, email, mcid}, false);
+  const account = {nickname, email, mcid};
+  await sset('minenko:my_registration', account, false);
+  await addToMyAccounts(account);
   if(ok){
     msg.innerHTML = '<span class="ok">登録できました！（共有データベースに保存されました）「ショップ」タブから注文できます。</span>';
   } else {
@@ -933,6 +960,59 @@ document.getElementById('reg-logout').addEventListener('click', async ()=>{
   await sset('minenko:my_registration', null, false);
   checkMyRegistration();
 });
+
+// ---------- アカウント切り替え（1端末に最大3つまで保存） ----------
+async function getMyAccounts(){
+  try{
+    const raw = localStorage.getItem('minenko_accounts');
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+async function saveMyAccountsList(list){
+  try{ localStorage.setItem('minenko_accounts', JSON.stringify(list)); }catch(e){}
+}
+async function addToMyAccounts(account){
+  let list = await getMyAccounts();
+  list = list.filter(a=>a.nickname !== account.nickname);
+  list.unshift(account);
+  list = list.slice(0,3);
+  await saveMyAccountsList(list);
+}
+async function renderAccountSlots(){
+  const list = await getMyAccounts();
+  const mine = await sget('minenko:my_registration', false);
+  const el = document.getElementById('account-slots');
+  if(!el) return;
+  el.innerHTML = list.length ? list.map(a=>`
+    <div class="tag-row" style="margin-bottom:4px;">
+      <span class="tag" style="cursor:pointer; ${mine && mine.nickname===a.nickname ? 'outline:2px solid var(--gold);' : ''}" onclick="switchAccount('${escapeAttr(a.nickname)}')">${mine && mine.nickname===a.nickname ? '✓ ' : ''}${escapeHtml(a.nickname)}</span>
+      <a href="javascript:void(0)" onclick="removeAccountSlot('${escapeAttr(a.nickname)}')" style="color:#ff8b7d; font-size:0.75rem; margin-left:6px;">✕</a>
+    </div>
+  `).join('') : '<span class="note">まだ保存されたアカウントがありません。</span>';
+  const addBtn = document.getElementById('account-add-new');
+  if(addBtn) addBtn.style.display = list.length >= 3 ? 'none' : 'inline-block';
+}
+async function switchAccount(nickname){
+  const list = await getMyAccounts();
+  const account = list.find(a=>a.nickname===nickname);
+  if(!account) return;
+  await sset('minenko:my_registration', account, false);
+  checkMyRegistration();
+}
+async function removeAccountSlot(nickname){
+  if(!confirm(`「${nickname}」をこの端末の一覧から削除しますか？（アカウント自体は消えません。切り替えられなくなるだけです）`)) return;
+  let list = await getMyAccounts();
+  list = list.filter(a=>a.nickname!==nickname);
+  await saveMyAccountsList(list);
+  renderAccountSlots();
+}
+document.getElementById('account-add-new').addEventListener('click', async ()=>{
+  const list = await getMyAccounts();
+  if(list.length >= 3){ alert('この端末では3つまでです。不要なアカウントを削除してから追加してください。'); return; }
+  document.getElementById('reg-form-wrap').style.display = 'block';
+  document.getElementById('reg-done-wrap').style.display = 'none';
+});
+
 async function checkMyRegistration(){
   const mine = await sget('minenko:my_registration', false);
   const formWrap = document.getElementById('reg-form-wrap');
@@ -941,6 +1021,7 @@ async function checkMyRegistration(){
     formWrap.style.display = 'none';
     doneWrap.style.display = 'block';
     document.getElementById('reg-done-text').textContent = `「${mine.nickname}」として登録ずみです。「ショップ」タブからそのまま注文できます。`;
+    renderAccountSlots();
   } else {
     formWrap.style.display = 'block';
     doneWrap.style.display = 'none';
@@ -2838,39 +2919,50 @@ function stepPong(){
     s.pausedUntil = null;
   }
 
-  if(s.friendMode === 'host'){
-    // フレンド対戦(ホスト): 相手の位置は同期された値をそのまま使う
-    if(s.paddleBX != null) s.botX = s.paddleBX;
-  } else {
-    // bot AI: ボールが自陣に向かってくる時だけ反応し、そこそこ遅め＆たまに反応が甘い
-    const botCenter = s.botX + s.paddleW/2;
-    const botSpeed = (s.botSpeed || 1.5) * factor;
-    if(s.ballVY < 0){
-      const deadZone = s.botDeadZone != null ? s.botDeadZone : 16; // 反応の甘さ
-      if(botCenter < s.ballX - deadZone) s.botX += botSpeed;
-      else if(botCenter > s.ballX + deadZone) s.botX -= botSpeed;
-    }
+  // bot AI: ボールが自陣に向かってくる時だけ反応し、そこそこ遅め＆たまに反応が甘い
+  const botCenter = s.botX + s.paddleW/2;
+  const botSpeed = (s.botSpeed || 1.5) * factor;
+  if(s.ballVY < 0){
+    const deadZone = s.botDeadZone != null ? s.botDeadZone : 16; // 反応の甘さ
+    if(botCenter < s.ballX - deadZone) s.botX += botSpeed;
+    else if(botCenter > s.ballX + deadZone) s.botX -= botSpeed;
   }
   s.botX = Math.max(0, Math.min(s.w - s.paddleW, s.botX));
 
-  s.ballX += s.ballVX * factor;
-  s.ballY += s.ballVY * factor;
+  // 高速球でもパドル・壁をすり抜けないよう、細かく分割して移動＆判定する
+  const totalDX = s.ballVX * factor;
+  const totalDY = s.ballVY * factor;
+  const dist = Math.max(Math.abs(totalDX), Math.abs(totalDY));
+  const steps = Math.max(1, Math.ceil(dist / 3));
+  const stepDX = totalDX / steps;
+  const stepDY = totalDY / steps;
+  for(let i=0; i<steps; i++){
+    s.ballX += stepDX;
+    s.ballY += stepDY;
 
-  // 左右の壁
-  if(s.ballX - 7 < 0){ s.ballX = 7; s.ballVX *= -1; }
-  if(s.ballX + 7 > s.w){ s.ballX = s.w - 7; s.ballVX *= -1; }
+    // 左右の壁
+    if(s.ballX - 7 < 0){ s.ballX = 7; s.ballVX *= -1; break; }
+    if(s.ballX + 7 > s.w){ s.ballX = s.w - 7; s.ballVX *= -1; break; }
 
-  // botパドルとの当たり判定（上部）
-  if(s.ballY - 7 < 24 && s.ballY - 7 > 14 && s.ballX > s.botX && s.ballX < s.botX + s.paddleW && s.ballVY < 0){
-    s.ballVY *= -1;
-    const hitPos = (s.ballX - (s.botX + s.paddleW/2)) / (s.paddleW/2);
-    s.ballVX = hitPos * 5.4;
-  }
-  // playerパドルとの当たり判定（下部）
-  if(s.ballY + 7 > s.h - 24 && s.ballY + 7 < s.h - 14 && s.ballX > s.playerX && s.ballX < s.playerX + s.paddleW && s.ballVY > 0){
-    s.ballVY *= -1;
-    const hitPos = (s.ballX - (s.playerX + s.paddleW/2)) / (s.paddleW/2);
-    s.ballVX = hitPos * 5.4;
+    // botパドルとの当たり判定（上部）
+    if(s.ballY - 7 < 24 && s.ballY - 7 > 8 && s.ballX > s.botX && s.ballX < s.botX + s.paddleW && s.ballVY < 0){
+      s.ballY = 24 + 7;
+      s.ballVY *= -1;
+      const hitPos = (s.ballX - (s.botX + s.paddleW/2)) / (s.paddleW/2);
+      s.ballVX = hitPos * 5.4;
+      break;
+    }
+    // playerパドルとの当たり判定（下部）
+    if(s.ballY + 7 > s.h - 24 && s.ballY + 7 < s.h - 8 && s.ballX > s.playerX && s.ballX < s.playerX + s.paddleW && s.ballVY > 0){
+      s.ballY = s.h - 24 - 7;
+      s.ballVY *= -1;
+      const hitPos = (s.ballX - (s.playerX + s.paddleW/2)) / (s.paddleW/2);
+      s.ballVX = hitPos * 5.4;
+      break;
+    }
+
+    // 得点（画面外に出たら以降のステップは不要）
+    if(s.ballY < 0 || s.ballY > s.h) break;
   }
 
   // 得点判定
@@ -2922,7 +3014,7 @@ function resetPongBall(direction){
   s.pendingDirection = direction;
   // 得点のたびにパドルも中央に戻す
   s.playerX = s.w/2 - s.paddleW/2;
-  if(s.friendMode !== 'host') s.botX = s.w/2 - s.paddleW/2;
+  s.botX = s.w/2 - s.paddleW/2;
 }
 function pongLoop(){
   if(!pongRunning) return;
@@ -2933,19 +3025,33 @@ function pongLoop(){
 function stopPongGame(){
   pongRunning = false;
   if(pongAnimId) cancelAnimationFrame(pongAnimId);
-  cancelFriendMatch();
 }
 const PONG_NAME_POOL = ['ゆうと','さくら','けんた','みお','たろう','はなこ','りく','あおい','しょう','ららら','じゅん','なな','ひまり','そら','かい','ゆい','れん','みなと','あかり','だいき'];
 function resetPongButtons(){
   document.getElementById('pong-start').disabled = false;
   document.getElementById('pong-start-online').disabled = false;
-  document.getElementById('pong-start-friend').disabled = false;
   document.getElementById('pong-start').textContent = 'BOTと対戦';
   document.getElementById('pong-start-online').textContent = '🌐 オンライン対戦';
-  document.getElementById('pong-start-friend').textContent = '👥 フレンド対戦';
+}
+function pongCountdownThenRun(onDone){
+  const s = pongState;
+  const steps = ['3','2','1','スタート！'];
+  let i = 0;
+  function showStep(){
+    drawPong();
+    pongCtx.fillStyle = 'rgba(0,0,0,0.5)';
+    pongCtx.fillRect(0,0,s.w,s.h);
+    pongCtx.fillStyle = '#e7c15a';
+    pongCtx.font = 'bold 40px sans-serif';
+    pongCtx.textAlign = 'center';
+    pongCtx.fillText(steps[i], s.w/2, s.h/2 + 14);
+    i++;
+    if(i < steps.length){ setTimeout(showStep, 700); }
+    else { setTimeout(onDone, 500); }
+  }
+  showStep();
 }
 function startPongGame(isOnline){
-  cancelFriendMatch();
   pongLastFrameTime = null;
   const canvas = document.getElementById('pong-canvas');
   if(!pongCtx) pongCtx = canvas.getContext('2d');
@@ -2973,286 +3079,19 @@ function startPongGame(isOnline){
   document.getElementById('pong-score-bot').textContent = 0;
   resetPongButtons();
   if(pongAnimId) cancelAnimationFrame(pongAnimId);
-  pongLoop();
+  pongCountdownThenRun(()=>{ pongLastFrameTime = null; pongLoop(); });
 }
 document.getElementById('pong-start').addEventListener('click', ()=> startPongGame(false));
 document.getElementById('pong-start-online').addEventListener('click', async ()=>{
-  cancelFriendMatch();
   const label = document.getElementById('pong-opponent-label');
   document.getElementById('pong-start').disabled = true;
   document.getElementById('pong-start-online').disabled = true;
-  document.getElementById('pong-start-friend').disabled = true;
   label.textContent = '🌐 マッチング中...';
   const delay = 1000 + Math.random()*4000; // 1〜5秒のリアルさ演出
   await new Promise(res => setTimeout(res, delay));
   resetPongButtons();
   startPongGame(true);
 });
-
-// ---------- フレンド対戦（実際の相手とオンライン風にマッチング） ----------
-let friendMode = null;      // null | 'host' | 'guest'
-let friendSearching = false;
-let friendMyName = null;
-let friendOpponentName = null;
-let friendQueueTimer = null;
-let friendHostTickTimer = null;
-let friendHostSyncTimer = null;
-let friendGuestTickTimer = null;
-let friendGuestSyncTimer = null;
-let friendHostTickCount = 0;
-
-async function getPongQueue(){
-  let q = await sget('minenko:pong_queue', true);
-  if(!q){ q = []; await sset('minenko:pong_queue', q, true); }
-  return q;
-}
-async function getActiveMatch(){
-  return await sget('minenko:pong_match', true);
-}
-async function getGuestPaddle(){
-  return await sget('minenko:pong_guest_paddle', true);
-}
-
-document.getElementById('pong-start-friend').addEventListener('click', async ()=>{
-  if(friendMode || friendSearching){
-    cancelFriendMatch();
-    resetPongButtons();
-    document.getElementById('pong-opponent-label').textContent = '';
-    return;
-  }
-  const mine = await sget('minenko:my_registration', false);
-  if(!mine || !mine.nickname){ alert('先に「登録」タブから登録してください。'); return; }
-  startFriendSearch(mine.nickname);
-});
-
-async function startFriendSearch(myName){
-  stopPongGame();
-  friendSearching = true;
-  friendMyName = myName;
-  document.getElementById('pong-start').disabled = true;
-  document.getElementById('pong-start-online').disabled = true;
-  document.getElementById('pong-start-friend').textContent = 'キャンセル（マッチング中...）';
-  document.getElementById('pong-opponent-label').textContent = '👥 フレンドを探しています…（誰かが「フレンド対戦」を押すとマッチします）';
-  document.getElementById('pong-score-player').textContent = 0;
-  document.getElementById('pong-score-bot').textContent = 0;
-  document.getElementById('pong-opponent-short').textContent = '???';
-
-  let queue = await getPongQueue();
-  queue = queue.filter(q => q.nickname !== myName);
-  queue.push({ nickname: myName, ts: Date.now() });
-  await sset('minenko:pong_queue', queue, true);
-
-  friendQueueTimer = setInterval(()=> pollFriendQueue(myName), 1500);
-}
-async function pollFriendQueue(myName){
-  if(!friendSearching) return;
-  let queue = await getPongQueue();
-  const now = Date.now();
-  queue = queue.filter(q => now - q.ts < 120000); // 2分以上待ってる人は掃除
-
-  const mineEntry = queue.find(q => q.nickname === myName);
-  if(!mineEntry){
-    queue.push({ nickname: myName, ts: now });
-    await sset('minenko:pong_queue', queue, true);
-    return;
-  }
-  const others = queue.filter(q => q.nickname !== myName);
-  if(!others.length){
-    await sset('minenko:pong_queue', queue, true);
-    return;
-  }
-  others.sort((a,b)=> a.ts - b.ts);
-  const opponent = others[0];
-  const amHost = mineEntry.ts <= opponent.ts;
-
-  queue = queue.filter(q => q.nickname !== myName && q.nickname !== opponent.nickname);
-  await sset('minenko:pong_queue', queue, true);
-
-  clearInterval(friendQueueTimer); friendQueueTimer = null;
-  friendSearching = false;
-  friendOpponentName = opponent.nickname;
-
-  if(amHost) becomeHost(myName, opponent.nickname);
-  else becomeGuest(myName, opponent.nickname);
-}
-function cancelFriendMatch(){
-  if(friendSearching){
-    friendSearching = false;
-    if(friendQueueTimer){ clearInterval(friendQueueTimer); friendQueueTimer = null; }
-    (async ()=>{
-      if(!friendMyName) return;
-      let queue = await getPongQueue();
-      queue = queue.filter(q => q.nickname !== friendMyName);
-      await sset('minenko:pong_queue', queue, true);
-    })();
-  }
-  if(friendMode){
-    friendMode = null;
-    if(friendHostTickTimer){ clearTimeout(friendHostTickTimer); friendHostTickTimer = null; }
-    if(friendHostSyncTimer){ clearInterval(friendHostSyncTimer); friendHostSyncTimer = null; }
-    if(friendGuestTickTimer){ clearInterval(friendGuestTickTimer); friendGuestTickTimer = null; }
-    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
-  }
-}
-
-async function becomeHost(myName, opponentName){
-  pongLastFrameTime = null;
-  const canvas = document.getElementById('pong-canvas');
-  if(!pongCtx) pongCtx = canvas.getContext('2d');
-  friendMode = 'host';
-  pongState = initPongState();
-  pongState.friendMode = 'host';
-  pongState.opponentName = opponentName;
-  pongState.paddleBX = pongState.w/2 - 35;
-
-  document.getElementById('pong-opponent-label').textContent = `👥 「${opponentName}」さんとマッチしました！`;
-  document.getElementById('pong-opponent-short').textContent = opponentName;
-  document.getElementById('pong-start-friend').textContent = 'フレンド対戦中...';
-
-  await sset('minenko:pong_match', {
-    hostName: myName, guestName: opponentName,
-    ballX: pongState.ballX, ballY: pongState.ballY,
-    ballVX: 0, ballVY: 0,
-    scoreHost: 0, scoreGuest: 0,
-    paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
-    pausedUntil: pongState.pausedUntil, pendingDirection: 1,
-    status: 'playing', winner: null, updatedAt: Date.now()
-  }, true);
-  await sset('minenko:pong_guest_paddle', pongState.paddleBX, true);
-
-  pongRunning = true;
-  friendHostTickCount = 0;
-  friendHostLoop();
-  friendHostSyncTimer = setInterval(hostSyncTick, 90);
-}
-function friendHostLoop(){
-  if(friendMode !== 'host') return;
-  stepPong();
-  drawPong();
-  friendHostTickTimer = setTimeout(friendHostLoop, 40);
-}
-async function hostSyncTick(){
-  if(friendMode !== 'host' || !pongState) return;
-  const gp = await getGuestPaddle();
-  if(typeof gp === 'number') pongState.paddleBX = gp;
-  await sset('minenko:pong_match', {
-    hostName: friendMyName, guestName: friendOpponentName,
-    ballX: pongState.ballX, ballY: pongState.ballY,
-    ballVX: pongState.ballVX, ballVY: pongState.ballVY,
-    scoreHost: pongState.scorePlayer, scoreGuest: pongState.scoreBot,
-    paddleAX: pongState.playerX, paddleBX: pongState.paddleBX,
-    pausedUntil: pongState.pausedUntil, pendingDirection: pongState.pendingDirection,
-    status: 'playing', winner: null, updatedAt: Date.now()
-  }, true);
-}
-async function finishFriendMatchAsHost(hostWon){
-  if(friendHostSyncTimer){ clearInterval(friendHostSyncTimer); friendHostSyncTimer = null; }
-  if(friendHostTickTimer){ clearTimeout(friendHostTickTimer); friendHostTickTimer = null; }
-  const s = pongState;
-  const winnerName = hostWon ? friendMyName : friendOpponentName;
-  const finishedHostName = friendMyName, finishedGuestName = friendOpponentName;
-  await sset('minenko:pong_match', {
-    hostName: finishedHostName, guestName: finishedGuestName,
-    ballX: s.ballX, ballY: s.ballY,
-    ballVX: 0, ballVY: 0,
-    scoreHost: s.scorePlayer, scoreGuest: s.scoreBot,
-    paddleAX: s.playerX, paddleBX: s.paddleBX,
-    pausedUntil: null, pendingDirection: 1,
-    status: 'finished', winner: winnerName, updatedAt: Date.now()
-  }, true);
-  showFriendMatchResult(hostWon, friendOpponentName);
-  friendMode = null;
-  pongRunning = false;
-  // ゲストが「終了」を受け取る時間を空けてから、次のマッチのために共有データを片付ける
-  setTimeout(async ()=>{
-    const current = await getActiveMatch();
-    if(current && current.hostName === finishedHostName && current.guestName === finishedGuestName){
-      await sset('minenko:pong_match', null, true);
-      await sset('minenko:pong_guest_paddle', null, true);
-    }
-  }, 4000);
-}
-async function becomeGuest(myName, opponentName){
-  pongLastFrameTime = null;
-  const canvas = document.getElementById('pong-canvas');
-  if(!pongCtx) pongCtx = canvas.getContext('2d');
-  friendMode = 'guest';
-  pongState = initPongState();
-  pongState.friendMode = 'guest';
-  pongState.opponentName = opponentName;
-  pongState.ballVX = 0; pongState.ballVY = 0;
-
-  document.getElementById('pong-opponent-label').textContent = `👥 「${opponentName}」さんとマッチしました！`;
-  document.getElementById('pong-opponent-short').textContent = opponentName;
-  document.getElementById('pong-start-friend').textContent = 'フレンド対戦中...';
-
-  pongRunning = true;
-  friendGuestLoop();
-  friendGuestSyncTimer = setInterval(guestSyncTick, 90);
-}
-function friendGuestLoop(){
-  if(friendMode !== 'guest') return;
-  const s = pongState;
-  const factor = pongDeltaFactor();
-  // 次の同期が届くまで、最後に受け取った速度でなめらかに予測して動かす
-  if(s.pausedUntil == null || Date.now() >= s.pausedUntil){
-    s.ballX += (s.ballVX || 0) * factor;
-    s.ballY += (s.ballVY || 0) * factor;
-  }
-  drawPong();
-  friendGuestTickTimer = setTimeout(friendGuestLoop, 40);
-}
-async function guestSyncTick(){
-  if(friendMode !== 'guest' || !pongState) return;
-  await sset('minenko:pong_guest_paddle', pongState.playerX, true);
-  const match = await getActiveMatch();
-  if(!match) return;
-  // 自分たちの対戦データかどうかを確認（他のペアの新しい試合と混ざらないように）
-  if(match.hostName !== friendOpponentName || match.guestName !== friendMyName) return;
-
-  if(match.status === 'finished'){
-    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
-    const guestWon = match.winner === friendMyName;
-    showFriendMatchResult(guestWon, friendOpponentName);
-    friendMode = null;
-    pongRunning = false;
-    return;
-  }
-  // しばらく更新が無ければ相手が切断したとみなす
-  if(match.updatedAt && Date.now() - match.updatedAt > 10000){
-    if(friendGuestSyncTimer){ clearInterval(friendGuestSyncTimer); friendGuestSyncTimer = null; }
-    document.getElementById('pong-opponent-label').textContent = `⚠️ 「${friendOpponentName}」さんとの通信が切れたようです。`;
-    friendMode = null;
-    pongRunning = false;
-    resetPongButtons();
-    return;
-  }
-  const s = pongState;
-  // ホスト視点とゲスト視点は上下が逆（お互い自分が下）なので、Y座標と縦速度を反転させる
-  s.ballX = match.ballX;
-  s.ballY = s.h - match.ballY;
-  s.ballVX = match.ballVX || 0;
-  s.ballVY = -(match.ballVY || 0);
-  s.botX = match.paddleAX;
-  s.scorePlayer = match.scoreGuest;
-  s.scoreBot = match.scoreHost;
-  s.pausedUntil = match.pausedUntil;
-  document.getElementById('pong-score-player').textContent = s.scorePlayer;
-  document.getElementById('pong-score-bot').textContent = s.scoreBot;
-}
-function showFriendMatchResult(won, opponentName){
-  const s = pongState;
-  setTimeout(()=>{
-    pongCtx.fillStyle = 'rgba(0,0,0,0.6)';
-    pongCtx.fillRect(0,0,s.w,s.h);
-    pongCtx.fillStyle = '#e7c15a';
-    pongCtx.font = 'bold 18px sans-serif';
-    pongCtx.textAlign = 'center';
-    pongCtx.fillText(won ? '🎉 あなたの勝ち！（+2スナーク）' : `😢 ${opponentName}の勝ち...`, s.w/2, s.h/2);
-  }, 30);
-  resetPongButtons();
-  if(won) grantPongWinReward();
-}
 
 function pongHandlePointer(clientX){
   const canvas = document.getElementById('pong-canvas');
