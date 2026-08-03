@@ -774,7 +774,7 @@ footer{ text-align:center; font-size:0.7rem; opacity:0.4; margin-top:30px; }
 </main>
 
 <footer>スナーク帝国 / Minecraft server use only</footer>
-<div class="version-badge">v3.50 (2026-07-22)</div>
+<div class="version-badge">v3.51 (2026-07-22)</div>
 
 <script>
 // ---------- remote shared storage (Firebase Realtime Database) ----------
@@ -1021,10 +1021,20 @@ async function checkMyRegistration(){
     formWrap.style.display = 'none';
     doneWrap.style.display = 'block';
     document.getElementById('reg-done-text').textContent = `「${mine.nickname}」として登録ずみです。「ショップ」タブからそのまま注文できます。`;
+    // 切り替え機能ができる前から登録していた人も、今のアカウントが必ず一覧に出るようにする
+    await ensureCurrentAccountInList(mine);
     renderAccountSlots();
   } else {
     formWrap.style.display = 'block';
     doneWrap.style.display = 'none';
+  }
+}
+async function ensureCurrentAccountInList(account){
+  let list = await getMyAccounts();
+  if(!list.some(a=>a.nickname===account.nickname)){
+    list.unshift(account);
+    list = list.slice(0,3);
+    await saveMyAccountsList(list);
   }
 }
 async function loadAccount(){
